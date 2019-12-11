@@ -92,7 +92,7 @@ pub contract FungibleToken {
     }
 
     init() {
-        let oldVault <- self.account.storage[Vault] <- create Vault(balance: 30)
+        let oldVault <- self.account.storage[Vault] <- create Vault(balance: 10)
         destroy oldVault
 
         self.account.storage[&Vault] = &self.account.storage[Vault] as Vault

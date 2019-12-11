@@ -58,28 +58,24 @@ func GenerateCreateThreeTokensArrayScript(tokenAddr flow.Address) []byte {
 }
 
 // GenerateMintVaultScript generates a script that mints 30 tokens and deposits them in an account
-func GenerateMintVaultScript(tokenCodeAddr, recipientAddr flow.Address) []byte {
+func GenerateMintVaultScript(tokenCodeAddr, recipientAddr flow.Address, amount int) []byte {
 	template := `
 		import FungibleToken from 0x%s
 
 		transaction {
 		  prepare(acct: Account) {
-			//var minterRef = acct.storage[&FungibleToken.VaultMinter] ?? panic("missing minter reference!")
-
-			let minter <- acct.storage[FungibleToken.VaultMinter] ?? panic("missing minter")
-			destroy minter
+			var minterRef = acct.storage[&FungibleToken.VaultMinter] ?? panic("missing minter reference!")
 
 			let recipient = getAccount(0x%s)
 
-			//let receiverRef = recipient.published[&FungibleToken.Receiver] ?? panic("missing receiver ref!")
+			let receiverRef = recipient.published[&FungibleToken.Receiver] ?? panic("missing receiver ref!")
 			
-			//minterRef.mintTokens(amount: 30, recipient: receiverRef)
-			
+			minterRef.mintTokens(amount: %d, recipient: receiverRef)
 		  }
 		}
 	`
 
-	return []byte(fmt.Sprintf(template, tokenCodeAddr, recipientAddr))
+	return []byte(fmt.Sprintf(template, tokenCodeAddr, recipientAddr, amount))
 }
 
 // GenerateWithdrawScript creates a script that withdraws

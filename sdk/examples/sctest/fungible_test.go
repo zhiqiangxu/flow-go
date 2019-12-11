@@ -23,7 +23,7 @@ func TestTokenDeployment(t *testing.T) {
 	_, err = b.CommitBlock()
 	assert.NoError(t, err)
 
-	_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 30))
+	_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 10))
 	if !assert.NoError(t, err) {
 		t.Log(err.Error())
 	}
@@ -37,7 +37,7 @@ func TestCreateToken(t *testing.T) {
 	contractAddr, err := b.CreateAccount(nil, tokenCode, GetNonce())
 	assert.NoError(t, err)
 
-	_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 30))
+	_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 10))
 	if !assert.NoError(t, err) {
 		t.Log(err.Error())
 	}
@@ -143,11 +143,6 @@ func TestExternalTransfers(t *testing.T) {
 	contractAddr, err := b.CreateAccount(nil, tokenCode, GetNonce())
 	assert.NoError(t, err)
 
-	_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 30))
-	if !assert.NoError(t, err) {
-		t.Log(err.Error())
-	}
-
 	// create a new account
 	bastianPrivateKey := randomKey()
 	bastianPublicKey := bastianPrivateKey.PublicKey(keys.PublicKeyWeightThreshold)
@@ -166,7 +161,7 @@ func TestExternalTransfers(t *testing.T) {
 
 	t.Run("Should be able to mint tokens to an external vault", func(t *testing.T) {
 		tx := flow.Transaction{
-			Script:         GenerateMintVaultScript(contractAddr, bastianAddress),
+			Script:         GenerateMintVaultScript(contractAddr, bastianAddress, 10),
 			Nonce:          GetNonce(),
 			ComputeLimit:   20,
 			PayerAccount:   b.RootAccountAddress(),
@@ -175,12 +170,12 @@ func TestExternalTransfers(t *testing.T) {
 
 		SignAndSubmit(tx, b, t, []flow.AccountPrivateKey{b.RootKey()}, []flow.Address{b.RootAccountAddress()}, false)
 
-		_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 30))
+		_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, b.RootAccountAddress(), 10))
 		if !assert.NoError(t, err) {
 			t.Log(err.Error())
 		}
 
-		_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, bastianAddress, 30))
+		_, _, err = b.ExecuteScript(GenerateInspectVaultScript(contractAddr, bastianAddress, 10))
 		if !assert.NoError(t, err) {
 			t.Log(err.Error())
 		}
