@@ -18,19 +18,12 @@ pub contract NonFungibleToken {
         }
     }
 
-    // possibility for each account with NFTs to have a copy of this resource that they keep their NFTs in
-    // they could send one NFT, multiple at a time, or potentially even send the entire collection in one go
-    pub resource interface INFTCollection {
+	pub resource interface NFTReceiver {
 
-        // dictionary of NFT conforming tokens
-        pub var ownedNFTs: @{Int: NFT}
+		// dictionary of NFT conforming tokens
+		pub var ownedNFTs: @{Int: NFT}
 
-        pub fun transfer(recipient: &NFTCollection, tokenID: Int) {
-            pre {
-                self.ownedNFTs[tokenID] != nil:
-                    "Token ID to transfer does not exist!"
-            }
-        }
+		pub fun deposit(token: <-NFT)
 
         pub fun withdraw(tokenID: Int): @NFT
 
@@ -42,7 +35,7 @@ pub contract NonFungibleToken {
         }
     }
 
-    pub resource NFTCollection: INFTCollection {
+    pub resource NFTCollection: NFTReceiver {
         // dictionary of NFT conforming tokens
         // NFT is a resource type with an `Int` ID field
         pub var ownedNFTs: @{Int: NFT}
@@ -108,5 +101,37 @@ pub contract NonFungibleToken {
     pub fun createCollection(): @NFTCollection {
         return <- create NFTCollection()
     }
+
+	pub resource NFTFactory {
+
+		// the ID that is used to mint moments
+		pub var idCount: Int
+
+		init() {
+			self.idCount = 1
+		}
+
+		// mintNFT mints a new NFT with a new ID
+		// and deposit it in the recipients colelction using their collection reference
+		pub fun mintNFT(recipient: &NFTCollection) {
+
+					// create a new NFT
+			var newNFT <- create NFT(newID: self.idCount)
+			
+					// deposit it in the recipient's account using their reference
+			recipient.deposit(token: <-newNFT)
+
+					// change the id so that each ID is unique
+			self.idCount = self.idCount + 1
+		}
+	}
+
+	init() {
+		let oldCollection <- self.account.storage[NFTCollection] <- create NFTCollection()
+		destroy oldCollection
+
+		let oldFactory <- self.account.storage[NFTFactory] <- create NFTFactory()
+		destroy oldFactory
+	}
 }
 

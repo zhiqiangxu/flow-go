@@ -10,14 +10,14 @@ import (
 // a new Vault instance and stores it in memory.
 // balance is an argument to the Vault constructor.
 // The Vault must have been deployed already.
-func GenerateCreateTokenScript(tokenAddr flow.Address, initialBalance int) []byte {
+func GenerateCreateTokenScript(tokenAddr flow.Address) []byte {
 	template := `
 		import FungibleToken from 0x%s
 
 		transaction {
 
 		  prepare(acct: Account) {
-			let oldVault <- acct.storage[FungibleToken.Vault] <- FungibleToken.createVault(initialBalance: %d)
+			let oldVault <- acct.storage[FungibleToken.Vault] <- FungibleToken.createEmptyVault()
 			destroy oldVault
 
 			acct.published[&FungibleToken.Receiver] = &acct.storage[FungibleToken.Vault] as FungibleToken.Receiver
@@ -25,23 +25,23 @@ func GenerateCreateTokenScript(tokenAddr flow.Address, initialBalance int) []byt
 		  }
 		}
 	`
-	return []byte(fmt.Sprintf(template, tokenAddr, initialBalance))
+	return []byte(fmt.Sprintf(template, tokenAddr))
 }
 
 // GenerateCreateThreeTokensArrayScript creates a script
 // that creates three new vault instances, stores them
 // in an array of vaults, and then stores the array
 // to the storage of the signer's account
-func GenerateCreateThreeTokensArrayScript(tokenAddr flow.Address, initialBalance int, bal2 int, bal3 int) []byte {
+func GenerateCreateThreeTokensArrayScript(tokenAddr flow.Address) []byte {
 	template := `
 		import FungibleToken from 0x%s
 
 		transaction {
 
 		  prepare(acct: Account) {
-			let vaultA <- FungibleToken.createVault(initialBalance: %d)
-    		let vaultB <- FungibleToken.createVault(initialBalance: %d)
-			let vaultC <- FungibleToken.createVault(initialBalance: %d)
+			let vaultA <- FungibleToken.createEmptyVault()
+    		let vaultB <- FungibleToken.createEmptyVault()
+			let vaultC <- FungibleToken.createEmptyVault()
 			
 			var vaultArray <- [<-vaultA, <-vaultB]
 
@@ -54,12 +54,37 @@ func GenerateCreateThreeTokensArrayScript(tokenAddr flow.Address, initialBalance
 		  }
 		}
 	`
-	return []byte(fmt.Sprintf(template, tokenAddr, initialBalance, bal2, bal3))
+	return []byte(fmt.Sprintf(template, tokenAddr))
+}
+
+// GenerateMintVaultScript generates a script that mints 30 tokens and deposits them in an account
+func GenerateMintVaultScript(tokenCodeAddr, recipientAddr flow.Address) []byte {
+	template := `
+		import FungibleToken from 0x%s
+
+		transaction {
+		  prepare(acct: Account) {
+			//var minterRef = acct.storage[&FungibleToken.VaultMinter] ?? panic("missing minter reference!")
+
+			let minter <- acct.storage[FungibleToken.VaultMinter] ?? panic("missing minter")
+			destroy minter
+
+			let recipient = getAccount(0x%s)
+
+			//let receiverRef = recipient.published[&FungibleToken.Receiver] ?? panic("missing receiver ref!")
+			
+			//minterRef.mintTokens(amount: 30, recipient: receiverRef)
+			
+		  }
+		}
+	`
+
+	return []byte(fmt.Sprintf(template, tokenCodeAddr, recipientAddr))
 }
 
 // GenerateWithdrawScript creates a script that withdraws
 // tokens from a vault and destroys the tokens
-func GenerateWithdrawScript(tokenCodeAddr flow.Address, vaultNumber int, withdrawAmount int) []byte {
+func GenerateWithdrawScript(tokenCodeAddr flow.Address, vaultNumber, withdrawAmount int) []byte {
 	template := `
 		import FungibleToken from 0x%s
 

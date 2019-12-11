@@ -81,7 +81,26 @@ pub contract FungibleToken {
         }
     }
 
-    pub fun createVault(initialBalance: Int): @Vault {
-        return <-create Vault(balance: initialBalance)
+    pub fun createEmptyVault(): @Vault {
+        return <-create Vault(balance: 0)
+    }
+
+    pub resource VaultMinter {
+        pub fun mintTokens(amount: Int, recipient: &Receiver) {
+            recipient.deposit(from: <-create Vault(balance: amount))
+        }
+    }
+
+    init() {
+        let oldVault <- self.account.storage[Vault] <- create Vault(balance: 30)
+        destroy oldVault
+
+        self.account.storage[&Vault] = &self.account.storage[Vault] as Vault
+        self.account.published[&Receiver] = &self.account.storage[Vault] as Receiver
+
+        let oldMinter <- self.account.storage[VaultMinter] <- create VaultMinter()
+        destroy oldMinter
+
+        self.account.storage[&VaultMinter] = &self.account.storage[VaultMinter] as VaultMinter
     }
 }
