@@ -77,6 +77,11 @@ func TestCreateSale(t *testing.T) {
 	t.Run("Should be able to create FTs and NFT collections in each accounts storage", func(t *testing.T) {
 		// create Fungible tokens and NFTs in each accounts storage and store references
 		setupUsersTokens(t, b, tokenAddr, nftAddr, []flow.AccountPrivateKey{bastianPrivateKey, joshPrivateKey}, []flow.Address{bastianAddress, joshAddress})
+
+		_, _, err = b.ExecuteScript(GenerateInspectCollectionScript(nftAddr, bastianAddress, 1, true))
+		if !assert.Nil(t, err) {
+			t.Log(err.Error())
+		}
 	})
 
 	t.Run("Can create sale collection", func(t *testing.T) {

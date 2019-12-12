@@ -254,7 +254,8 @@ func GenerateInspectVaultScript(tokenCodeAddr, userAddr flow.Address, expectedBa
 				panic("Wrong balance!")
 			}
 		}
-    `
+	`
+	fmt.Println(fmt.Sprintf(template, tokenCodeAddr, userAddr, expectedBalance))
 
 	return []byte(fmt.Sprintf(template, tokenCodeAddr, userAddr, expectedBalance))
 }
@@ -275,6 +276,5 @@ func GenerateInspectVaultArrayScript(tokenCodeAddr, userAddr flow.Address, vault
             )
         }
 	`
-
 	return []byte(fmt.Sprintf(template, tokenCodeAddr, userAddr, vaultNumber, expectedBalance))
 }
