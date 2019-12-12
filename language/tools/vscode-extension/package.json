@@ -40,7 +40,8 @@
         "command": "cadence.createAccount",
         "category": "Cadence",
         "title": "Create account"
-      }, {
+      },
+      {
         "command": "cadence.switchActiveAccount",
         "category": "Cadence",
         "title": "Switch account"

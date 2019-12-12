@@ -81,6 +81,10 @@ pub contract FungibleToken {
         }
     }
 
+    pub fun createVault(initialBalance: Int): @Vault {
+        return <-create Vault(balance: initialBalance)
+    }
+
     pub fun createEmptyVault(): @Vault {
         return <-create Vault(balance: 0)
     }

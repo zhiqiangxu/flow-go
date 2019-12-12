@@ -11,18 +11,18 @@ import (
 func GenerateCreateSaleScript(tokenAddr flow.Address, marketAddr flow.Address) []byte {
 	template := `
 		import FungibleToken from 0x%s
-		import Market from 0x%s
+		import Marketplace from 0x%s
 
 		transaction {
 			prepare(acct: Account) {
 				let ownerVault = acct.published[&FungibleToken.Receiver] ?? panic("No receiver reference!")
 
-				let collection <- Market.createSaleCollection(ownerVault: ownerVault)
+				let collection <- Marketplace.createSaleCollection(ownerVault: ownerVault)
 				
-				let oldCollection <- acct.storage[Market.SaleCollection] <- collection
+				let oldCollection <- acct.storage[Marketplace.SaleCollection] <- collection
 				destroy oldCollection
 
-				acct.published[&Market.SaleCollection] = &acct.storage[Market.SaleCollection] as Market.SaleCollection
+				acct.published[&Marketplace.SaleCollection] = &acct.storage[Marketplace.SaleCollection] as Marketplace.SaleCollection
 			}
 		}`
 	return []byte(fmt.Sprintf(template, tokenAddr, marketAddr))
@@ -33,13 +33,13 @@ func GenerateCreateSaleScript(tokenAddr flow.Address, marketAddr flow.Address) [
 func GenerateStartSaleScript(nftAddr flow.Address, marketAddr flow.Address, id, price int) []byte {
 	template := `
 		import NonFungibleToken from 0x%s
-		import Market from 0x%s
+		import Marketplace from 0x%s
 
 		transaction {
 			prepare(acct: Account) {
-				let token <- acct.published[&NonFungibleToken.NFTCollection]?.withdraw(tokenID: %d) ?? panic("missing token!")
+				let token <- acct.storage[&NonFungibleToken.NFTCollection]?.withdraw(tokenID: %d) ?? panic("missing token!")
 
-				let saleRef = acct.published[&Market.SaleCollection] ?? panic("no sale collection reference!")
+				let saleRef = acct.published[&Marketplace.SaleCollection] ?? panic("no sale collection reference!")
 			
 				saleRef.listForSale(token: <-token, price: %d)
 
@@ -54,18 +54,18 @@ func GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, userAddr flow.Address
 	template := `
 		import FungibleToken from 0x%s
 		import NonFungibleToken from 0x%s
-		import Market from 0x%s
+		import Marketplace from 0x%s
 
 		transaction {
 			prepare(acct: Account) {
 				let seller = getAccount(0x%s)
 
-				let collectionRef = acct.published[&NonFungibleToken.NFTCollection] ?? panic("missing collection!")
+				let collectionRef = acct.published[&NonFungibleToken.Receiver] ?? panic("missing collection!")
 				let providerRef = acct.published[&FungibleToken.Provider] ?? panic("missing Provider!")
 				
 				let tokens <- providerRef.withdraw(amount: %d)
 
-				let saleRef = seller.published[&Market.SaleCollection] ?? panic("no sale collection reference!")
+				let saleRef = seller.published[&Marketplace.SaleCollection] ?? panic("no sale collection reference!")
 			
 				saleRef.purchase(tokenID: %d, recipient: collectionRef, buyTokens: <-tokens)
 

@@ -30,8 +30,9 @@ func GenerateCreateNFTScript(tokenAddr flow.Address, id int) []byte {
 			
 			let oldCollection <- acct.storage[NonFungibleToken.NFTCollection] <- collection
 			destroy oldCollection
-
-			acct.published[&NonFungibleToken.NFTCollection] = &acct.storage[NonFungibleToken.NFTCollection] as NonFungibleToken.NFTCollection
+			
+			acct.storage[&NonFungibleToken.NFTCollection] = &acct.storage[NonFungibleToken.NFTCollection] as NonFungibleToken.NFTCollection
+			acct.published[&NonFungibleToken.Receiver] = &acct.storage[NonFungibleToken.NFTCollection] as NonFungibleToken.Receiver
 		  }
 		}
 	`
@@ -49,8 +50,8 @@ func GenerateDepositScript(tokenCodeAddr flow.Address, receiverAddr flow.Address
 		  prepare(acct: Account) {
 			let recipient = getAccount(0x%s)
 
-			let collectionRef = acct.published[&NonFungibleToken.NFTCollection] ?? panic("missing NFT collection reference")
-			let depositRef = recipient.published[&NonFungibleToken.NFTCollection] ?? panic("missing deposit reference")
+			let collectionRef = acct.storage[&NonFungibleToken.NFTCollection] ?? panic("missing NFT collection reference")
+			let depositRef = recipient.published[&NonFungibleToken.Receiver] ?? panic("missing deposit reference")
 
 			let nft <- collectionRef.withdraw(tokenID: %d)
 
@@ -72,8 +73,8 @@ func GenerateTransferScript(tokenCodeAddr flow.Address, receiverAddr flow.Addres
 		  prepare(acct: Account) {
 			let recipient = getAccount(0x%s)
 
-			let collectionRef = acct.published[&NonFungibleToken.NFTCollection] ?? panic("missing NFT collection reference")
-			let depositRef = recipient.published[&NonFungibleToken.NFTCollection] ?? panic("missing deposit reference")
+			let collectionRef = acct.storage[&NonFungibleToken.NFTCollection] ?? panic("missing NFT collection reference")
+			let depositRef = recipient.published[&NonFungibleToken.Receiver] ?? panic("missing deposit reference")
 
 			collectionRef.transfer(recipient: depositRef, tokenID: %d)
 		  }
@@ -92,7 +93,7 @@ func GenerateInspectCollectionScript(nftCodeAddr, userAddr flow.Address, nftID i
 
 		pub fun main() {
 		  let acct = getAccount(0x%s)
-		  let collectionRef = acct.published[&NonFungibleToken.NFTCollection] ?? panic("missing collection reference")
+		  let collectionRef = acct.published[&NonFungibleToken.Receiver] ?? panic("missing collection reference")
 		
 		  if collectionRef.idExists(tokenID: %d) != %v {
 			panic("Token ID doesn't exist!")
@@ -112,7 +113,7 @@ func GenerateInspectKeysScript(nftCodeAddr, userAddr flow.Address, id1, id2 int)
 
 		pub fun main() {
 		  let acct = getAccount(0x%s)
-		  let collectionRef = acct.published[&NonFungibleToken.NFTCollection] ?? panic("missing collection reference")
+		  let collectionRef = acct.published[&NonFungibleToken.Receiver] ?? panic("missing collection reference")
 		
 		  let array = collectionRef.getIDs()
 

@@ -19,10 +19,21 @@ import NonFungibleToken from 0x0000000000000000000000000000000000000003
 //       how do I do this? Generic NFTs? Using interfaces instead of resources as argument
 //       and storage types?
 
+pub contract Marketplace {
 
-pub contract Market {
+    pub resource interface SalePublic {
+            pub var forSale: @{Int: NonFungibleToken.NFT}
+            pub var prices: {Int: Int}
 
-    pub resource SaleCollection {
+            pub fun purchase(tokenID: Int, recipient: &NonFungibleToken.Receiver, buyTokens: @FungibleToken.Vault)
+
+            pub fun idPrice(tokenID: Int): Int
+
+            pub fun getIDs(): [Int]
+    }
+
+
+    pub resource SaleCollection: SalePublic {
 
         // a dictionary of the NFTs that the user is putting up for sale
         pub var forSale: @{Int: NonFungibleToken.NFT}
@@ -66,11 +77,11 @@ pub contract Market {
         }
 
         // purchase lets a user send tokens to purchase an NFT that is for sale
-        pub fun purchase(tokenID: Int, recipient: &NonFungibleToken.NFTCollection, buyTokens: @FungibleToken.Receiver) {
+        pub fun purchase(tokenID: Int, recipient: &NonFungibleToken.Receiver, buyTokens: @FungibleToken.Vault) {
             pre {
-                self.forSale[tokenID] != nil && self.prices[tokenID] != nil:
+                self.forSale[tokenID] != nil:
                     "No token matching this ID for sale!"
-                buyTokens.balance >= (self.prices[tokenID] ?? 0):
+                buyTokens.balance >= (self.prices[tokenID] ?? panic("missing price!")):
                     "Not enough tokens to by the NFT!"
             }
 
@@ -83,8 +94,8 @@ pub contract Market {
         }
 
         // idPrice returns the price of a specific token in the sale
-        pub fun idPrice(tokenID: Int): Int? {
-            let price = self.prices[tokenID]
+        pub fun idPrice(tokenID: Int): Int {
+            let price = self.prices[tokenID] ?? panic("no price!")
             return price
         }
 
@@ -96,16 +107,10 @@ pub contract Market {
         destroy() {
             destroy self.forSale
         }
-
-        // createCollection returns a new collection resource to the caller
-        pub fun createCollection(ownerVault: &FungibleToken.Receiver): @SaleCollection {
-            return <- create SaleCollection(vault: ownerVault)
-        }
     }
 
-    // createCollection returns a new collection resource to the caller
-    pub fun createSaleCollection(ownerVault: &FungibleToken.Receiver): @SaleCollection {
-        return <- create SaleCollection(vault: ownerVault)
+    pub fun createSale(vault: &FungibleToken.Receiver): @SaleCollection {
+        return <-create SaleCollection(vault: vault)
     }
 
     // Marketplace would be the central contract where people can post their sale
@@ -132,6 +137,6 @@ pub contract Market {
         pub fun removeSaleCollection(index: Int) {
             self.tokensForSale.remove(at: index)
         }
-
     }
 }
+ 

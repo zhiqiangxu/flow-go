@@ -18,24 +18,29 @@ pub contract NonFungibleToken {
         }
     }
 
-	pub resource interface NFTReceiver {
+	pub resource interface Receiver {
 
 		// dictionary of NFT conforming tokens
 		pub var ownedNFTs: @{Int: NFT}
 
-		pub fun deposit(token: <-NFT)
+		pub fun deposit(token: @NFT) {
+			pre {
+				token.id > 0:
+					"token ID must be positive!"
+			}
+		}
 
-        pub fun withdraw(tokenID: Int): @NFT
+		pub fun getIDs(): [Int]
 
-        pub fun deposit(token: @NFT): Void {
-            pre {
-                token.id >= 0:
-                    "ID cannot be negative"
-            }
-        }
-    }
+		pub fun idExists(tokenID: Int): Bool {
+			pre {
+				tokenID > 0:
+					"token ID must be positive!"
+			}
+		}
+	}
 
-    pub resource NFTCollection: NFTReceiver {
+    pub resource NFTCollection: Receiver {
         // dictionary of NFT conforming tokens
         // NFT is a resource type with an `Int` ID field
         pub var ownedNFTs: @{Int: NFT}
@@ -65,7 +70,7 @@ pub contract NonFungibleToken {
         // transfer takes a reference to another user's NFT collection,
         // takes the NFT out of this collection, and deposits it
         // in the reference's collection
-        pub fun transfer(recipient: &NFTCollection, tokenID: Int): Void {
+        pub fun transfer(recipient: &Receiver, tokenID: Int): Void {
 
             // remove the token from the dictionary get the token from the optional
             let token <- self.withdraw(tokenID: tokenID)
@@ -130,8 +135,13 @@ pub contract NonFungibleToken {
 		let oldCollection <- self.account.storage[NFTCollection] <- create NFTCollection()
 		destroy oldCollection
 
+		self.account.storage[&NFTCollection] = &self.account.storage[NFTCollection] as NFTCollection
+        self.account.published[&Receiver] = &self.account.storage[NFTCollection] as Receiver
+
 		let oldFactory <- self.account.storage[NFTFactory] <- create NFTFactory()
 		destroy oldFactory
+
+		self.account.storage[&NFTFactory] = &self.account.storage[NFTFactory] as NFTFactory
 	}
 }
 
