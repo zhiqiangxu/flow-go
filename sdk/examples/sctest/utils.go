@@ -88,7 +88,7 @@ func setupUsersTokens(t *testing.T, b *emulator.EmulatedBlockchain, tokenAddr fl
 	// add array of signers to transaction
 	for i := 0; i < len(signingAddresses); i++ {
 		tx := flow.Transaction{
-			Script:         GenerateCreateBalanceTokenScript(tokenAddr),
+			Script:         GenerateCreateBalanceTokenScript(tokenAddr, 30),
 			Nonce:          GetNonce(),
 			ComputeLimit:   20,
 			PayerAccount:   b.RootAccountAddress(),

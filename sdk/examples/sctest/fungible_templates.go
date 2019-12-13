@@ -32,14 +32,14 @@ func GenerateCreateTokenScript(tokenAddr flow.Address) []byte {
 // a new Vault instance and stores it in memory.
 // balance is an argument to the Vault constructor.
 // The Vault must have been deployed already.
-func GenerateCreateBalanceTokenScript(tokenAddr flow.Address) []byte {
+func GenerateCreateBalanceTokenScript(tokenAddr flow.Address, balance int) []byte {
 	template := `
 		import FungibleToken from 0x%s
 
 		transaction {
 
 		  prepare(acct: Account) {
-			let oldVault <- acct.storage[FungibleToken.Vault] <- FungibleToken.createVault(initialBalance: 10)
+			let oldVault <- acct.storage[FungibleToken.Vault] <- FungibleToken.createVault(initialBalance: %d)
 			destroy oldVault
 
 			acct.published[&FungibleToken.Receiver] = &acct.storage[FungibleToken.Vault] as FungibleToken.Receiver
@@ -47,7 +47,7 @@ func GenerateCreateBalanceTokenScript(tokenAddr flow.Address) []byte {
 		  }
 		}
 	`
-	return []byte(fmt.Sprintf(template, tokenAddr))
+	return []byte(fmt.Sprintf(template, tokenAddr, balance))
 }
 
 // GenerateCreateThreeTokensArrayScript creates a script
@@ -246,17 +246,12 @@ func GenerateInspectVaultScript(tokenCodeAddr, userAddr flow.Address, expectedBa
 		pub fun main() {
 			let acct = getAccount(0x%s)
 			let vaultRef = acct.published[&FungibleToken.Receiver] ?? panic("missing Receiver reference")
-			// assert(
-            //     vaultRef.balance == ,
-            //     message: "incorrect Balance!"
-			// )
-			if vaultRef.balance != %d {
-				panic("Wrong balance!")
-			}
+			assert(
+                vaultRef.balance == %d,
+                message: "incorrect Balance!"
+			)
 		}
 	`
-	fmt.Println(fmt.Sprintf(template, tokenCodeAddr, userAddr, expectedBalance))
-
 	return []byte(fmt.Sprintf(template, tokenCodeAddr, userAddr, expectedBalance))
 }
 

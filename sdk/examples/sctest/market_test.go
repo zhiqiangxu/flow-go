@@ -110,7 +110,7 @@ func TestCreateSale(t *testing.T) {
 
 	t.Run("Cannot buy an NFT for less than the sale price", func(t *testing.T) {
 		tx := flow.Transaction{
-			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 1, 9),
+			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 9, 1),
 			Nonce:          GetNonce(),
 			ComputeLimit:   10,
 			PayerAccount:   b.RootAccountAddress(),
@@ -122,7 +122,7 @@ func TestCreateSale(t *testing.T) {
 
 	t.Run("Cannot buy an NFT that is not for sale", func(t *testing.T) {
 		tx := flow.Transaction{
-			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 2, 10),
+			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 10, 2),
 			Nonce:          GetNonce(),
 			ComputeLimit:   10,
 			PayerAccount:   b.RootAccountAddress(),
@@ -134,7 +134,7 @@ func TestCreateSale(t *testing.T) {
 
 	t.Run("Can buy an NFT that is for sale", func(t *testing.T) {
 		tx := flow.Transaction{
-			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 1, 10),
+			Script:         GenerateBuySaleScript(tokenAddr, nftAddr, marketAddr, bastianAddress, 10, 1),
 			Nonce:          GetNonce(),
 			ComputeLimit:   10,
 			PayerAccount:   b.RootAccountAddress(),
