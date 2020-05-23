@@ -78,9 +78,9 @@ func main() {
 			flags.DurationVar(&minInterval, "min-interval", time.Millisecond, "the minimum amount of time between two blocks")
 			flags.DurationVar(&maxInterval, "max-interval", 90*time.Second, "the maximum amount of time between two blocks")
 			flags.DurationVar(&hotstuffTimeout, "hotstuff-timeout", 60*time.Second, "the initial timeout for the hotstuff pacemaker")
-			flags.DurationVar(&hotstuffMinTimeout, "hotstuff-min-timeout", 1200*time.Millisecond, "the lower timeout bound for the hotstuff pacemaker")
+			flags.DurationVar(&hotstuffMinTimeout, "hotstuff-min-timeout", 3000*time.Millisecond, "the lower timeout bound for the hotstuff pacemaker")
 			flags.DurationVar(&hotstuffTimeoutDecrease, "hotstuff-timeout-decrease", 1*time.Second, "decrease of timeout duration in case of progress")
-			flags.Float64Var(&hotstuffTimeoutInfreaseFactor, "hotstuff-timeout-increase-factor", 2.0, "multiplicative increase of timeout duration in case of time out event")
+			flags.Float64Var(&hotstuffTimeoutInfreaseFactor, "hotstuff-timeout-increase-factor", 1.5, "multiplicative increase of timeout duration in case of time out event")
 			flags.Float64Var(&hotstuffTimeoutVoteAggregationFraction, "hotstuff-timeout-vote-aggregation-fraction", 0.5, "additional fraction of replica timeout that the primary will wait for votes")
 			// From the experiment,
 			// if block rate delay is 1 second, then 0.8 block will be finalized per second in average.

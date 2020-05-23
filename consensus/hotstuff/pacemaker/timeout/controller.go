@@ -111,3 +111,9 @@ func (t *Controller) OnProgressBeforeTimeout() {
 func (t *Controller) BlockRateDelay() time.Duration {
 	return time.Duration(t.cfg.BlockRateDelayMS * float64(time.Millisecond))
 }
+
+func (t *Controller) Adrenaline() {
+	upper_timeout_bound := 12 * time.Second
+	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(upper_timeout_bound.Milliseconds()))
+	t.cfg.ReplicaTimeout = math.Max(newTimeout, t.cfg.MinReplicaTimeout)
+}
