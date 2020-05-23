@@ -12,18 +12,19 @@ import (
 )
 
 // FlowPaceMaker is a basic implementation of hotstuff.PaceMaker
-type FlowPaceMaker struct {
+// Adrenaline is released in each view V for which replica knows a QC with V = QC.view +1; Adrenaline is idempotent!
+type AdrenalinePaceMaker struct {
 	currentView    uint64
 	timeoutControl *timeout.Controller
 	notifier       hotstuff.Consumer
 	started        *atomic.Bool
 }
 
-func New(startView uint64, timeoutController *timeout.Controller, notifier hotstuff.Consumer) (*FlowPaceMaker, error) {
+func New(startView uint64, timeoutController *timeout.Controller, notifier hotstuff.Consumer) (hotstuff.PaceMaker, error) {
 	if startView < 1 {
 		return nil, &model.ErrorConfiguration{Msg: "Please start PaceMaker with view > 0. (View 0 is reserved for genesis block, which has no proposer)"}
 	}
-	pm := FlowPaceMaker{
+	pm := AdrenalinePaceMaker{
 		currentView:    startView,
 		timeoutControl: timeoutController,
 		notifier:       notifier,
@@ -36,7 +37,7 @@ func New(startView uint64, timeoutController *timeout.Controller, notifier hotst
 // ensures that the view number is STRICTLY monotonously increasing. The method
 // gotoView panics as a last resort if FlowPaceMaker is modified to violate this condition.
 // Hence, gotoView will _always_ return a NewViewEvent for an _increased_ view number.
-func (p *FlowPaceMaker) gotoView(newView uint64) *model.NewViewEvent {
+func (p *AdrenalinePaceMaker) gotoView(newView uint64) *model.NewViewEvent {
 	if newView <= p.currentView {
 		// This should never happen: in the current implementation, it is trivially apparent that
 		// newView is _always_ larger than currentView. This check is to protect the code from
@@ -54,15 +55,15 @@ func (p *FlowPaceMaker) gotoView(newView uint64) *model.NewViewEvent {
 }
 
 // CurView returns the current view
-func (p *FlowPaceMaker) CurView() uint64 {
+func (p *AdrenalinePaceMaker) CurView() uint64 {
 	return p.currentView
 }
 
-func (p *FlowPaceMaker) TimeoutChannel() <-chan time.Time {
+func (p *AdrenalinePaceMaker) TimeoutChannel() <-chan time.Time {
 	return p.timeoutControl.Channel()
 }
 
-func (p *FlowPaceMaker) UpdateCurViewWithQC(qc *model.QuorumCertificate) (*model.NewViewEvent, bool) {
+func (p *AdrenalinePaceMaker) UpdateCurViewWithQC(qc *model.QuorumCertificate) (*model.NewViewEvent, bool) {
 	if qc.View < p.currentView {
 		return nil, false
 	}
@@ -71,11 +72,11 @@ func (p *FlowPaceMaker) UpdateCurViewWithQC(qc *model.QuorumCertificate) (*model
 	// => 2/3 of replicas are at least in view qc.view + 1.
 	// => replica can skip ahead to view qc.view + 1
 	p.timeoutControl.OnProgressBeforeTimeout()
-	p.timeoutControl.Adrenaline()
+	p.timeoutControl.Adrenaline() // dispense Adrenaline for View V = qc.View + 1
 	return p.gotoView(qc.View + 1), true
 }
 
-func (p *FlowPaceMaker) UpdateCurViewWithBlock(block *model.Block, isLeaderForNextView bool) (*model.NewViewEvent, bool) {
+func (p *AdrenalinePaceMaker) UpdateCurViewWithBlock(block *model.Block, isLeaderForNextView bool) (*model.NewViewEvent, bool) {
 	// use block's QC to fast-forward if possible
 	newViewOnQc, newViewOccurredOnQc := p.UpdateCurViewWithQC(block.QC)
 	if block.View != p.currentView {
@@ -92,7 +93,7 @@ func (p *FlowPaceMaker) UpdateCurViewWithBlock(block *model.Block, isLeaderForNe
 		// if we get a second block for the current View.
 		return nil, false
 	}
-	newViewOnBlock, newViewOccurredOnBlock := p.actOnBlockForCurView(isLeaderForNextView)
+	newViewOnBlock, newViewOccurredOnBlock := p.actOnBlockForCurView(block, isLeaderForNextView)
 	if !newViewOccurredOnBlock { // if processing current block didn't lead to NewView event,
 		// the initial processing of the block's QC still might have changes the view:
 		return newViewOnQc, newViewOccurredOnQc
@@ -101,27 +102,36 @@ func (p *FlowPaceMaker) UpdateCurViewWithBlock(block *model.Block, isLeaderForNe
 	return newViewOnBlock, newViewOccurredOnBlock
 }
 
-func (p *FlowPaceMaker) actOnBlockForCurView(isLeaderForNextView bool) (*model.NewViewEvent, bool) {
+func (p *AdrenalinePaceMaker) actOnBlockForCurView(block *model.Block, isLeaderForNextView bool) (*model.NewViewEvent, bool) {
+	if block.QC.View+1 == p.currentView { // release adrenaline for V = QC.view +1 = currentView
+		// As Adrenaline is idempotent, repeating release adrenaline for this view is fine
+		p.timeoutControl.Adrenaline()
+	}
 	if isLeaderForNextView {
 		timerInfo := p.timeoutControl.StartTimeout(model.VoteCollectionTimeout, p.currentView)
 		p.notifier.OnStartingTimeout(timerInfo)
 		return nil, false
 	}
-	p.timeoutControl.OnProgressBeforeTimeout()
+	if block.QC.View+1 == p.currentView {
+		// only decrease timeout if block has been build on a quorum from the previous view;
+		// otherwise, the committee is still not synchronized
+		p.timeoutControl.OnProgressBeforeTimeout()
+	}
+	// no Adrenaline as we do NOT know a QC with QC.view + 1 = currentView + 1
 	return p.gotoView(p.currentView + 1), true
 }
 
-func (p *FlowPaceMaker) OnTimeout() *model.NewViewEvent {
+func (p *AdrenalinePaceMaker) OnTimeout() *model.NewViewEvent {
 	p.emitTimeoutNotifications(p.timeoutControl.TimerInfo())
 	p.timeoutControl.OnTimeout()
 	return p.gotoView(p.currentView + 1)
 }
 
-func (p *FlowPaceMaker) emitTimeoutNotifications(timeout *model.TimerInfo) {
+func (p *AdrenalinePaceMaker) emitTimeoutNotifications(timeout *model.TimerInfo) {
 	p.notifier.OnReachedTimeout(timeout)
 }
 
-func (p *FlowPaceMaker) Start() {
+func (p *AdrenalinePaceMaker) Start() {
 	if p.started.Swap(true) {
 		return
 	}
@@ -129,6 +139,6 @@ func (p *FlowPaceMaker) Start() {
 	p.notifier.OnStartingTimeout(timerInfo)
 }
 
-func (p *FlowPaceMaker) BlockRateDelay() time.Duration {
+func (p *AdrenalinePaceMaker) BlockRateDelay() time.Duration {
 	return p.timeoutControl.BlockRateDelay()
 }

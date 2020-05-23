@@ -116,6 +116,7 @@ func (t *Controller) BlockRateDelay() time.Duration {
 	return time.Duration(t.cfg.BlockRateDelayMS * float64(time.Millisecond))
 }
 
+// Adrenaline is idempotent
 func (t *Controller) Adrenaline() {
 	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(adrenaline.Milliseconds()))
 	t.cfg.ReplicaTimeout = math.Max(newTimeout, t.cfg.MinReplicaTimeout)
