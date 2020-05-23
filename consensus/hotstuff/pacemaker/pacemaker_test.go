@@ -384,7 +384,7 @@ func Test_VoteTimeout(t *testing.T) {
 	notifier.AssertExpectations(t)
 
 	// the previous pacemaker update decreased the vote timeout by (additiveDecrease * voteTimeoutFraction)
-	expectedTimeout := (startRepTimeout - additiveDecrease) * voteTimeoutFraction
+	expectedTimeout := startRepTimeout * voteTimeoutFraction
 	select {
 	case <-pm.TimeoutChannel():
 		break // testing path: corresponds to EventLoop picking up timeout from channel

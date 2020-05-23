@@ -7,6 +7,10 @@ import (
 	"github.com/dapperlabs/flow-go/consensus/hotstuff/model"
 )
 
+const (
+	adrenaline = 12 * time.Second
+)
+
 // Controller implements a timout with:
 // - on timeout: increase timeout by multiplicative factor `timeoutIncrease` (user-specified)
 //   this results in exponential growing timeout duration on multiple subsequent timeouts
@@ -113,7 +117,6 @@ func (t *Controller) BlockRateDelay() time.Duration {
 }
 
 func (t *Controller) Adrenaline() {
-	upperTimeoutBound := 12 * time.Second
-	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(upperTimeoutBound.Milliseconds()))
+	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(adrenaline.Milliseconds()))
 	t.cfg.ReplicaTimeout = math.Max(newTimeout, t.cfg.MinReplicaTimeout)
 }
