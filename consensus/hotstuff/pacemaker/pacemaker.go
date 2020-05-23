@@ -131,3 +131,7 @@ func (p *FlowPaceMaker) Start() {
 func (p *FlowPaceMaker) BlockRateDelay() time.Duration {
 	return p.timeoutControl.BlockRateDelay()
 }
+
+func (p *FlowPaceMaker) Adrenaline() {
+
+}

@@ -113,7 +113,7 @@ func (t *Controller) BlockRateDelay() time.Duration {
 }
 
 func (t *Controller) Adrenaline() {
-	upper_timeout_bound := 12 * time.Second
-	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(upper_timeout_bound.Milliseconds()))
+	upperTimeoutBound := 12 * time.Second
+	newTimeout := math.Min(t.cfg.ReplicaTimeout, float64(upperTimeoutBound.Milliseconds()))
 	t.cfg.ReplicaTimeout = math.Max(newTimeout, t.cfg.MinReplicaTimeout)
 }
