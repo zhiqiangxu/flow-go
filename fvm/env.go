@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/onflow/cadence/runtime/sema"
 	"math/rand"
 
 	"github.com/onflow/cadence"
@@ -293,6 +294,32 @@ func (e *hostEnv) CacheProgram(location common.Location, program *ast.Program) e
 	return e.ctx.ASTCache.SetProgram(location, program)
 }
 
+func (e *hostEnv) GetCachedElaboration(location common.Location) (*sema.Checker, error) {
+	if e.ctx.ASTCache == nil {
+		return nil, nil
+	}
+
+	elaboration, err := e.ctx.ASTCache.GetElaboration(location)
+	if elaboration != nil {
+		// Elaboration was found within cache, do an explicit ledger register touch
+		// to ensure consistent reads during chunk verification.
+		if addressLocation, ok := location.(common.AddressLocation); ok {
+			e.accounts.TouchContract(addressLocation.Name, flow.BytesToAddress(addressLocation.Address.Bytes()))
+		}
+	}
+
+	// TODO: improve error passing https://github.com/onflow/cadence/issues/202
+	return elaboration, err
+}
+
+func (e *hostEnv) CacheElaboration(location common.Location, checker *sema.Checker) error {
+	if e.ctx.ASTCache == nil {
+		return nil
+	}
+	return e.ctx.ASTCache.SetElaboration(location, checker)
+}
+
+
 func (e *hostEnv) Log(message string) error {
 	if e.ctx.CadenceLoggingEnabled {
 		e.logs = append(e.logs, message)
@@ -515,6 +542,9 @@ func (e *transactionEnv) UpdateAccountContractCode(address runtime.Address, name
 		return errors.New("code deployment requires authorization from the service account")
 	}
 
+	// Clear the cache before updating the contract
+	e.ctx.ASTCache.Clear()
+
 	return e.accounts.SetContract(name, accountAddress, code)
 }
 
@@ -526,6 +556,9 @@ func (e *transactionEnv) RemoveAccountContractCode(address runtime.Address, name
 		// TODO: improve error passing https://github.com/onflow/cadence/issues/202
 		return errors.New("code deployment requires authorization from the service account")
 	}
+
+	// Clear the cache before removing the contract
+	e.ctx.ASTCache.Clear()
 
 	return e.accounts.DeleteContract(name, accountAddress)
 }

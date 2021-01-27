@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/onflow/cadence/runtime/sema"
 	"strings"
 	"testing"
 
@@ -31,6 +32,21 @@ func CreateContractDeploymentTransaction(contractName string, contract string, a
                 signer.contracts.add(name: "%s", code: "%s".decodeHex())
               }
             }`, contractName, encoded)),
+		).
+		AddAuthorizer(authorizer).
+		AddAuthorizer(chain.ServiceAddress())
+}
+
+
+func CreateContractUpdateTransaction(contractName string, contract string, authorizer flow.Address, chain flow.Chain) *flow.TransactionBody {
+	encoded := hex.EncodeToString([]byte(contract))
+
+	return flow.NewTransactionBody().
+		SetScript([]byte(fmt.Sprintf(`transaction {
+              prepare(signer: AuthAccount, service: AuthAccount) {
+                signer.contracts.%s(name: "%s", code: "%s".decodeHex())
+              }
+            }`, sema.AuthAccountContractsTypeUpdateExperimentalFunctionName, contractName, encoded)),
 		).
 		AddAuthorizer(authorizer).
 		AddAuthorizer(chain.ServiceAddress())
