@@ -74,7 +74,7 @@ func (cache *LRUASTCache) SetProgram(location common.Location, program *ast.Prog
 	return nil
 }
 
-// GetChecker retrieves an elaboration from the LRU cache.
+// GetElaboration retrieves an elaboration from the LRU cache.
 func (cache *LRUASTCache) GetElaboration(location common.Location) (*sema.Checker, error) {
 	program, found := cache.elaborations.Get(location.ID())
 	if found {
@@ -104,7 +104,7 @@ func (cache *LRUASTCache) GetElaboration(location common.Location) (*sema.Checke
 	return nil, nil
 }
 
-// SetChecker adds an elaboration to the LRU cache.
+// SetElaboration adds an elaboration to the LRU cache.
 func (cache *LRUASTCache) SetElaboration(location common.Location, checker *sema.Checker) error {
 	_ = cache.elaborations.Add(location.ID(), checker)
 	return nil
