@@ -184,7 +184,6 @@ func (i *TransactionInvocator) Process(
 		if er != nil {
 			panic(er)
 		}
-		i.safetyErrorCheck(err)
 		i.logger.Info().
 			Str("txHash", proc.ID.String()).
 			Uint64("blockHeight", blockHeight).
