@@ -16,8 +16,9 @@ func (d *TransactionFeeDeductor) Process(
 	ctx Context,
 	proc *TransactionProcedure,
 	st *state.State,
+	programs *Programs,
 ) error {
-	err := d.deductFees(vm, ctx, proc.Transaction, st)
+	err := d.deductFees(vm, ctx, proc.Transaction, st, programs)
 	if err == nil {
 		er := st.Commit()
 		if er != nil {
@@ -32,11 +33,12 @@ func (d *TransactionFeeDeductor) deductFees(
 	ctx Context,
 	tx *flow.TransactionBody,
 	st *state.State,
+	programs *Programs,
 ) error {
-
 	return vm.invokeMetaTransaction(
 		ctx,
 		deductTransactionFeeTransaction(tx.Payer, ctx.Chain.ServiceAddress()),
 		st,
+		programs,
 	)
 }

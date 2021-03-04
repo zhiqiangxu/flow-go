@@ -81,6 +81,7 @@ func New(
 			staticExecutionRPC: executionRPC,
 			connFactory:        connFactory,
 			state:              state,
+			log:                log,
 		},
 		backendTransactions: backendTransactions{
 			staticCollectionRPC:  collectionRPC,
@@ -96,6 +97,7 @@ func New(
 			retry:                retry,
 			connFactory:          connFactory,
 			previousAccessNodes:  historicalAccessNodes,
+			log:                  log,
 		},
 		backendEvents: backendEvents{
 			staticExecutionRPC: executionRPC,
@@ -119,6 +121,7 @@ func New(
 			headers:            headers,
 			executionReceipts:  executionReceipts,
 			connFactory:        connFactory,
+			log:                log,
 		},
 		collections:       collections,
 		executionReceipts: executionReceipts,
@@ -169,7 +172,11 @@ func (b *Backend) GetCollectionByID(_ context.Context, colID flow.Identifier) (*
 	// retrieve the collection from the collection storage
 	col, err := b.collections.LightByID(colID)
 	if err != nil {
-		err = convertStorageError(err)
+		// Collections are retrieved asynchronously as we finalize blocks, so
+		// it is possible for a client to request a finalized block from us
+		// containing some collection, then get a not found error when requesting
+		// that collection. These clients should retry.
+		err = convertStorageError(fmt.Errorf("please retry for collection in finalized block: %w", err))
 		return nil, err
 	}
 
@@ -198,7 +205,7 @@ func convertStorageError(err error) error {
 }
 
 // executionNodesForBlockID returns upto maxExecutionNodesCnt number of randomly chosen execution node identities
-// which have executed the given block ID. If no such execution node is found, then an error is returned.
+// which have executed the given block ID. If no such execution node is found, an empty list is returned.
 func executionNodesForBlockID(
 	blockID flow.Identifier,
 	executionReceipts storage.ExecutionReceipts,
@@ -217,7 +224,7 @@ func executionNodesForBlockID(
 	}
 
 	if len(executorIDs) == 0 {
-		return nil, fmt.Errorf("no execution node found for block ID %v: %w", blockID, err)
+		return flow.IdentityList{}, nil
 	}
 
 	// find the node identities of these execution nodes

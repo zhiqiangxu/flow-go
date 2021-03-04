@@ -54,9 +54,9 @@ func main() {
 	var (
 		guaranteeLimit                         uint
 		resultLimit                            uint
-		receiptLimit                           uint
 		approvalLimit                          uint
 		sealLimit                              uint
+		pendngReceiptsLimit                    uint
 		minInterval                            time.Duration
 		maxInterval                            time.Duration
 		maxSealPerBlock                        uint
@@ -72,31 +72,33 @@ func main() {
 		requiredApprovalsForSealConstruction   uint
 		emergencySealing                       bool
 
-		err              error
-		mutableState     protocol.MutableState
-		privateDKGData   *bootstrap.DKGParticipantPriv
-		guarantees       mempool.Guarantees
-		results          mempool.IncorporatedResults
-		receipts         mempool.Receipts
-		approvals        mempool.Approvals
-		seals            mempool.IncorporatedResultSeals
-		prov             *provider.Engine
-		receiptRequester *requester.Engine
-		syncCore         *synchronization.Core
-		comp             *compliance.Engine
-		conMetrics       module.ConsensusMetrics
-		mainMetrics      module.HotstuffMetrics
-		receiptValidator module.ReceiptValidator
-		chunkAssigner    *chmodule.ChunkAssigner
+		err               error
+		mutableState      protocol.MutableState
+		privateDKGData    *bootstrap.DKGParticipantPriv
+		guarantees        mempool.Guarantees
+		results           mempool.IncorporatedResults
+		receipts          mempool.ExecutionTree
+		approvals         mempool.Approvals
+		seals             mempool.IncorporatedResultSeals
+		pendingReceipts   mempool.PendingReceipts
+		prov              *provider.Engine
+		receiptRequester  *requester.Engine
+		syncCore          *synchronization.Core
+		comp              *compliance.Engine
+		conMetrics        module.ConsensusMetrics
+		mainMetrics       module.HotstuffMetrics
+		receiptValidator  module.ReceiptValidator
+		approvalValidator module.ApprovalValidator
+		chunkAssigner     *chmodule.ChunkAssigner
 	)
 
 	cmd.FlowNode(flow.RoleConsensus.String()).
 		ExtraFlags(func(flags *pflag.FlagSet) {
 			flags.UintVar(&guaranteeLimit, "guarantee-limit", 1000, "maximum number of guarantees in the memory pool")
 			flags.UintVar(&resultLimit, "result-limit", 10000, "maximum number of execution results in the memory pool")
-			flags.UintVar(&receiptLimit, "receipt-limit", 10000, "maximum number of execution receipts in the memory pool")
 			flags.UintVar(&approvalLimit, "approval-limit", 1000, "maximum number of result approvals in the memory pool")
 			flags.UintVar(&sealLimit, "seal-limit", 10000, "maximum number of block seals in the memory pool")
+			flags.UintVar(&pendngReceiptsLimit, "pending-receipts-limit", 10000, "maximum number of pending receipts in the mempool")
 			flags.DurationVar(&minInterval, "min-interval", time.Millisecond, "the minimum amount of time between two blocks")
 			flags.DurationVar(&maxInterval, "max-interval", 90*time.Second, "the maximum amount of time between two blocks")
 			flags.UintVar(&maxSealPerBlock, "max-seal-per-block", 100, "the maximum number of seals to be included in a block")
@@ -143,13 +145,19 @@ func main() {
 				node.Storage.Results,
 				signature.NewAggregationVerifier(encoding.ExecutionReceiptTag))
 
+			resultApprovalSigVerifier := signature.NewAggregationVerifier(encoding.ResultApprovalTag)
+
+			approvalValidator = validation.NewApprovalValidator(
+				node.State,
+				resultApprovalSigVerifier)
+
 			sealValidator := validation.NewSealValidator(
 				node.State,
 				node.Storage.Headers,
 				node.Storage.Payloads,
 				node.Storage.Seals,
 				chunkAssigner,
-				signature.NewAggregationVerifier(encoding.ResultApprovalTag),
+				resultApprovalSigVerifier,
 				requiredApprovalsForSealVerification,
 				conMetrics)
 
@@ -176,18 +184,13 @@ func main() {
 			return err
 		}).
 		Module("execution receipts mempool", func(node *cmd.FlowNodeBuilder) error {
-			receipts, err = stdmap.NewReceipts(receiptLimit)
-			if err != nil {
-				return err
-			}
-
+			receipts = consensusMempools.NewExecutionTree()
 			// registers size method of backend for metrics
 			err = node.Metrics.Mempool.Register(metrics.ResourceReceipt, receipts.Size)
 			if err != nil {
 				return fmt.Errorf("could not register backend metric: %w", err)
 			}
-
-			return err
+			return nil
 		}).
 		Module("result approvals mempool", func(node *cmd.FlowNodeBuilder) error {
 			approvals, err = stdmap.NewApprovals(approvalLimit)
@@ -202,6 +205,10 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("failed to wrap seals mempool into ExecStateForkSuppressor: %w", err)
 			}
+			return nil
+		}).
+		Module("pending receipts mempool", func(node *cmd.FlowNodeBuilder) error {
+			pendingReceipts = stdmap.NewPendingReceipts(pendngReceiptsLimit)
 			return nil
 		}).
 		Module("hotstuff main metrics", func(node *cmd.FlowNodeBuilder) error {
@@ -229,7 +236,7 @@ func main() {
 				return nil, err
 			}
 
-			match, err := matching.New(
+			match, err := matching.NewEngine(
 				node.Logger,
 				node.Metrics.Engine,
 				node.Tracer,
@@ -246,8 +253,10 @@ func main() {
 				receipts,
 				approvals,
 				seals,
+				pendingReceipts,
 				chunkAssigner,
 				receiptValidator,
+				approvalValidator,
 				requiredApprovalsForSealConstruction,
 				emergencySealing,
 			)
@@ -292,23 +301,23 @@ func main() {
 			// initialize the pending blocks cache
 			proposals := buffer.NewPendingBlocks()
 
-			// initialize the compliance engine
-			comp, err = compliance.New(
-				node.Logger,
+			core, err := compliance.NewCore(node.Logger,
 				node.Metrics.Engine,
 				node.Tracer,
 				node.Metrics.Mempool,
-				conMetrics,
-				node.Network,
-				node.Me,
+				node.Metrics.Compliance,
 				cleaner,
 				node.Storage.Headers,
 				node.Storage.Payloads,
 				mutableState,
-				prov,
 				proposals,
-				syncCore,
-			)
+				syncCore)
+			if err != nil {
+				return nil, fmt.Errorf("coult not initialize compliance core: %w", err)
+			}
+
+			// initialize the compliance engine
+			comp, err = compliance.NewEngine(node.Logger, node.Network, node.Me, prov, core)
 			if err != nil {
 				return nil, fmt.Errorf("could not initialize compliance engine: %w", err)
 			}
@@ -323,6 +332,7 @@ func main() {
 				node.Storage.Seals,
 				node.Storage.Index,
 				node.Storage.Blocks,
+				node.Storage.Results,
 				guarantees,
 				seals,
 				receipts,
@@ -376,8 +386,20 @@ func main() {
 			)
 			signer = verification.NewMetricsWrapper(signer, mainMetrics) // wrapper for measuring time spent with crypto-related operations
 
+			// initialize the indexer to add index for receipts by the executed block id.
+			// so that receipts can be found by block id.
+			indexer := matching.NewIndexer(node.Logger, node.Storage.Receipts, node.Storage.Payloads)
+
 			// initialize a logging notifier for hotstuff
-			notifier := createNotifier(node.Logger, mainMetrics, node.Tracer, node.Storage.Index, node.RootChainID)
+			notifier := createNotifier(
+				node.Logger,
+				mainMetrics,
+				node.Tracer,
+				node.Storage.Index,
+				node.RootChainID,
+				indexer,
+			)
+			// make compliance engine as a FinalizationConsumer
 			// initialize the persister
 			persist := persister.New(node.DB, node.RootChainID)
 

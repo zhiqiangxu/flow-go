@@ -12,6 +12,9 @@ import (
 	"github.com/onflow/flow-go/storage"
 )
 
+// Functor that is used to retrieve parent of ExecutionResult.
+type GetPreviousResult func(*flow.ExecutionResult) (*flow.ExecutionResult, error)
+
 // receiptValidator holds all needed context for checking
 // receipt validity against current protocol state.
 type receiptValidator struct {
@@ -32,29 +35,6 @@ func NewReceiptValidator(state protocol.State, index storage.Index, results stor
 	return rv
 }
 
-// checkIsStakedNodeWithRole checks whether, at the given block, `nodeID`
-//   * has _positive_ weight
-//   * and has the expected role
-// Returns the following errors:
-//   * sentinel engine.InvalidInputError if any of the above-listed conditions are violated.
-// Note: the method receives the identity as proof of its existence.
-// Therefore, we consider the case where the respective identity is unknown to the
-// protocol state as a symptom of a fatal implementation bug.
-func (v *receiptValidator) ensureStakedNodeWithRole(identity *flow.Identity, expectedRole flow.Role) error {
-	// check that the origin is an expected node
-	if identity.Role != expectedRole {
-		return engine.NewInvalidInputErrorf("expected node %x to have identity %v but got %v", identity.NodeID, expectedRole, identity.Role)
-	}
-
-	// check if the identity has a stake
-	if identity.Stake == 0 {
-		return engine.NewInvalidInputErrorf("node has zero stake (%x)", identity.NodeID)
-	}
-
-	// TODO: check if node was ejected
-	return nil
-}
-
 func (v *receiptValidator) verifySignature(receipt *flow.ExecutionReceipt, nodeIdentity *flow.Identity) error {
 	id := receipt.ID()
 	valid, err := v.verifier.Verify(id[:], receipt.ExecutorSignature, nodeIdentity.StakingPubKey)
@@ -63,7 +43,7 @@ func (v *receiptValidator) verifySignature(receipt *flow.ExecutionReceipt, nodeI
 	}
 
 	if !valid {
-		return engine.NewInvalidInputErrorf("Invalid signature for (%x)", nodeIdentity.NodeID)
+		return engine.NewInvalidInputErrorf("invalid signature for (%x)", nodeIdentity.NodeID)
 	}
 
 	return nil
@@ -89,13 +69,11 @@ func (v *receiptValidator) verifyChunksFormat(result *flow.ExecutionResult) erro
 
 	index, err := v.index.ByBlockID(result.BlockID)
 	if err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			return err
-		}
-		// reaching this line means the block is empty, i.e. it has no payload => we expect only the system chunk
-	} else {
-		requiredChunks += len(index.CollectionIDs)
+		// the mutator will always create payload index for a valid block
+		return fmt.Errorf("could not find payload index for executed block %v: %w", result.BlockID, err)
 	}
+
+	requiredChunks += len(index.CollectionIDs)
 
 	if result.Chunks.Len() != requiredChunks {
 		return engine.NewInvalidInputErrorf("invalid number of chunks, expected %d got %d",
@@ -109,10 +87,9 @@ func (v *receiptValidator) previousResult(result *flow.ExecutionResult) (*flow.E
 	prevResult, err := v.results.ByID(result.PreviousResultID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return nil, engine.NewInvalidInputErrorf("receipt's previous result (%x) is unknown", result.PreviousResultID)
-		} else {
-			return nil, err
+			return nil, NewUnverifiableError(result.PreviousResultID)
 		}
+		return nil, err
 	}
 	return prevResult, nil
 }
@@ -155,27 +132,72 @@ func (v *receiptValidator) resultChainCheck(result *flow.ExecutionResult, prevRe
 		return fmt.Errorf("missing initial state commitment in execution result %v", result.ID())
 	}
 	if !bytes.Equal(initialState, finalState) {
-		return engine.NewInvalidInputError("execution results do not form chain")
+		return engine.NewInvalidInputErrorf("execution results do not form chain: expecting init state %x, but got %x",
+			finalState, initialState)
 	}
 	return nil
 }
 
-// Validate performs checks for ExecutionReceipt being valid or no.
-// Checks performed:
-// 	* can find stake and stake is positive
-//	* signature is correct
+// Validate performs verifies that the ExecutionReceipt satisfies
+// the following conditions:
+// 	* is from Execution node with positive weight
+//	* has valid signature
 //	* chunks are in correct format
-// 	* execution result has a valid parent
-// Returns nil if all checks passed successfully
-func (v *receiptValidator) Validate(receipt *flow.ExecutionReceipt) error {
-	identity, err := identityForNode(v.state, receipt.ExecutionResult.BlockID, receipt.ExecutorID)
-	if err != nil {
-		return fmt.Errorf("failed to get executor identity %v, %w", receipt.ExecutorID, err)
+// 	* execution result has a valid parent and satisfies the subgraph check
+// Returns nil if all checks passed successfully.
+// Expected errors during normal operations:
+// * engine.InvalidInputError
+// * validation.UnverifiableError
+func (v *receiptValidator) Validate(receipts []*flow.ExecutionReceipt) error {
+	// lookup cache to avoid linear search when checking for previous result that is
+	// part of payload
+	payloadExecutionResults := make(map[flow.Identifier]*flow.ExecutionResult)
+	for _, receipt := range receipts {
+		payloadExecutionResults[receipt.ExecutionResult.ID()] = &receipt.ExecutionResult
+	}
+	// Build a functor that performs lookup first in receipts that were passed as payload and only then in
+	// local storage. This is needed to handle a case when same block payload contains receipts that
+	// reference each other.
+	// ATTENTION: Here we assume that ER is valid, this lookup can return a result which is actually invalid.
+	// Eventually invalid result will be detected and fail the whole validation.
+	previousResult := func(executionResult *flow.ExecutionResult) (*flow.ExecutionResult, error) {
+		prevResult, found := payloadExecutionResults[executionResult.PreviousResultID]
+		if found {
+			return prevResult, nil
+		}
+
+		return v.previousResult(executionResult)
 	}
 
-	err = v.ensureStakedNodeWithRole(identity, flow.RoleExecution)
+	for i, r := range receipts {
+		err := v.validate(r, previousResult)
+		if err != nil {
+			// It's very important that we fail the whole validation if one of the receipts is invalid.
+			// It allows us to make assumptions as stated in previous comment.
+			return fmt.Errorf("could not validate receipt %v at index %d: %w", r.ID(), i, err)
+		}
+	}
+	return nil
+}
+
+func (v *receiptValidator) validate(receipt *flow.ExecutionReceipt, getPreviousResult GetPreviousResult) error {
+	identity, err := identityForNode(v.state, receipt.ExecutionResult.BlockID, receipt.ExecutorID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get executor identity %v at block %v: %w",
+			receipt.ExecutorID,
+			receipt.ExecutionResult.BlockID,
+			err)
+	}
+
+	err = ensureStakedNodeWithRole(identity, flow.RoleExecution)
 	if err != nil {
 		return fmt.Errorf("staked node invalid: %w", err)
+	}
+
+	prevResult, err := getPreviousResult(&receipt.ExecutionResult)
+	if err != nil {
+		return err
 	}
 
 	err = v.verifySignature(receipt, identity)
@@ -185,12 +207,7 @@ func (v *receiptValidator) Validate(receipt *flow.ExecutionReceipt) error {
 
 	err = v.verifyChunksFormat(&receipt.ExecutionResult)
 	if err != nil {
-		return fmt.Errorf("invalid chunks format: %w", err)
-	}
-
-	prevResult, err := v.previousResult(&receipt.ExecutionResult)
-	if err != nil {
-		return err
+		return fmt.Errorf("invalid chunks format for result %v: %w", receipt.ExecutionResult.ID(), err)
 	}
 
 	err = v.subgraphCheck(&receipt.ExecutionResult, prevResult)

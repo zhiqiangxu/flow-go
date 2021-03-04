@@ -5,8 +5,9 @@ import (
 
 	"github.com/onflow/flow-go/model/cluster"
 	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/module/metrics"
 )
+
+type EntriesFunc func() uint
 
 // Network Metrics
 type NetworkMetrics interface {
@@ -29,6 +30,9 @@ type NetworkMetrics interface {
 	// QueueDuration tracks the time spent by a message with the given priority in the queue
 	QueueDuration(duration time.Duration, priority int)
 
+	// InboundProcessDuration tracks the time a queue worker blocked by an engine for processing an incoming message on specified topic (i.e., channel).
+	InboundProcessDuration(topic string, duration time.Duration)
+
 	// OutboundConnections updates the metric tracking the number of outbound connections of this node
 	OutboundConnections(connectionCount uint)
 
@@ -47,6 +51,7 @@ type ComplianceMetrics interface {
 	SealedHeight(height uint64)
 	BlockFinalized(*flow.Block)
 	BlockSealed(*flow.Block)
+	BlockProposalDuration(duration time.Duration)
 }
 
 type CleanerMetrics interface {
@@ -61,7 +66,7 @@ type CacheMetrics interface {
 
 type MempoolMetrics interface {
 	MempoolEntries(resource string, entries uint)
-	Register(resource string, entriesFunc metrics.EntriesFunc) error
+	Register(resource string, entriesFunc EntriesFunc) error
 }
 
 type HotstuffMetrics interface {
@@ -135,11 +140,17 @@ type ConsensusMetrics interface {
 	// FinishBlockToSeal reports Metrics C4: Block Received by CCL → Block Seal in finalized block
 	FinishBlockToSeal(blockID flow.Identifier)
 
-	// CheckSealingDuration records absolute time for the full sealing check by the consensus match engine
-	CheckSealingDuration(duration time.Duration)
-
 	// EmergencySeal increments the number of seals that were created in emergency mode
 	EmergencySeal()
+
+	// OnReceiptProcessingDuration records the number of seconds spent processing a receipt
+	OnReceiptProcessingDuration(duration time.Duration)
+
+	// OnApprovalProcessingDuration records the number of seconds spent processing an approval
+	OnApprovalProcessingDuration(duration time.Duration)
+
+	// CheckSealingDuration records absolute time for the full sealing check by the consensus match engine
+	CheckSealingDuration(duration time.Duration)
 }
 
 type VerificationMetrics interface {
@@ -319,7 +330,7 @@ type TransactionMetrics interface {
 }
 
 type PingMetrics interface {
-	// NodeReachable tracks the node availability of the node and reports it as 1 if the node was successfully pinged, 0
-	// otherwise. The nodeInfo provides additional information about the node such as the name of the node operator
-	NodeReachable(node *flow.Identity, nodeInfo string, reachable bool)
+	// NodeReachable tracks the round trip time in milliseconds taken to ping a node
+	// The nodeInfo provides additional information about the node such as the name of the node operator
+	NodeReachable(node *flow.Identity, nodeInfo string, rtt time.Duration)
 }
