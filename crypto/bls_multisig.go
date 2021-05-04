@@ -32,10 +32,10 @@ import (
 import "C"
 
 // prefix for all application tags (any non PoP tag)
-const applicationTagPrefix = "APP"
+const applicationTagPrefix = "APP_"
 
 // prefix only for the PoP tag
-const popTagPrefix = "POP"
+const popTagPrefix = "POP_"
 
 // the PoP hasher, used to generate and verify PoPs
 var popKMAC = internalBLSKMAC(popTagPrefix)
