@@ -6,9 +6,9 @@ import (
 
 	executionState "github.com/onflow/flow-go/engine/execution/state"
 	"github.com/onflow/flow-go/fvm/programs"
+	"github.com/onflow/flow-go/model/verification"
 
 	"github.com/onflow/flow-go/engine/execution/state/delta"
-	"github.com/onflow/flow-go/engine/verification"
 	"github.com/onflow/flow-go/fvm"
 	"github.com/onflow/flow-go/fvm/state"
 	"github.com/onflow/flow-go/ledger"
@@ -36,6 +36,7 @@ func NewChunkVerifier(vm VirtualMachine, vmCtx fvm.Context) *ChunkVerifier {
 		systemChunkCtx: fvm.NewContextFromParent(vmCtx,
 			fvm.WithRestrictedAccountCreation(false),
 			fvm.WithRestrictedDeployment(false),
+			fvm.WithServiceEventCollectionEnabled(),
 			fvm.WithTransactionProcessors(fvm.NewTransactionInvocator(vmCtx.Logger)),
 		),
 	}
@@ -133,7 +134,14 @@ func (fcv *ChunkVerifier) verifyTransactionsInContext(context fvm.Context, chunk
 			if errors.Is(err, ledger.ErrMissingKeys{}) {
 
 				unknownRegTouch[registerID.String()] = &registerKey
-				return nil, fmt.Errorf("missing register")
+
+				// don't send error just return empty byte slice
+				// we always assume empty value for missing registers (which might cause the transaction to fail)
+				// but after execution we check unknownRegTouch and if any
+				// register is inside it, code won't generate approvals and
+				// it activates a challenge
+
+				return []byte{}, nil
 			}
 			// append to missing keys if error is ErrMissingKeys
 
@@ -158,12 +166,10 @@ func (fcv *ChunkVerifier) verifyTransactionsInContext(context fvm.Context, chunk
 			return nil, nil, fmt.Errorf("failed to execute transaction: %d (%w)", i, err)
 		}
 
-		if tx.Err == nil {
-			// if tx is successful, we apply changes to the chunk view by merging the txView into chunk view
-			err = chunkView.MergeView(txView)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to execute transaction: %d (%w)", i, err)
-			}
+		// always merge back the tx view (fvm is responsible for changes on tx errors)
+		err = chunkView.MergeView(txView)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to execute transaction: %d (%w)", i, err)
 		}
 	}
 

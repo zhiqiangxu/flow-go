@@ -5,10 +5,10 @@
 package mocks
 
 import (
-	v2 "github.com/dgraph-io/badger/v2"
 	gomock "github.com/golang/mock/gomock"
 	flow "github.com/onflow/flow-go/model/flow"
 	storage "github.com/onflow/flow-go/storage"
+	transaction "github.com/onflow/flow-go/storage/badger/transaction"
 	reflect "reflect"
 )
 
@@ -124,10 +124,10 @@ func (mr *MockBlocksMockRecorder) Store(arg0 interface{}) *gomock.Call {
 }
 
 // StoreTx mocks base method
-func (m *MockBlocks) StoreTx(arg0 *flow.Block) func(*v2.Txn) error {
+func (m *MockBlocks) StoreTx(arg0 *flow.Block) func(*transaction.Tx) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StoreTx", arg0)
-	ret0, _ := ret[0].(func(*v2.Txn) error)
+	ret0, _ := ret[0].(func(*transaction.Tx) error)
 	return ret0
 }
 

@@ -72,6 +72,7 @@ func Decode(data []byte) (operation WALOperation, rootHash ledger.RootHash, upda
 		rootHash, err = ledger.ToRootHash(rootHashBytes)
 		if err != nil {
 			err = fmt.Errorf("invalid root hash: %w", err)
+			return
 		}
 		return
 	default:

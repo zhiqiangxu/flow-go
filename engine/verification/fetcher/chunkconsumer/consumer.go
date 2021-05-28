@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	DefaultJobIndex = uint64(0)
+	DefaultJobIndex     = uint64(0)
+	DefaultChunkWorkers = uint64(20)
 )
 
 // ChunkConsumer consumes the jobs from the job queue, and pass it to the
@@ -28,17 +29,15 @@ func NewChunkConsumer(
 	processedIndex storage.ConsumerProgress, // to persist the processed index
 	chunksQueue storage.ChunksQueue, // to read jobs (chunks) from
 	engine fetcher.AssignedChunkProcessor, // to process jobs (chunks)
-	maxProcessing int64, // max number of jobs to be processed in parallel
+	maxProcessing uint64, // max number of jobs to be processed in parallel
 ) *ChunkConsumer {
 	worker := NewWorker(engine)
 	engine.WithChunkConsumerNotifier(worker)
 
 	jobs := &ChunkJobs{locators: chunksQueue}
 
-	// TODO: adding meta to logger
-	consumer := jobqueue.NewConsumer(
-		log, jobs, processedIndex, worker, maxProcessing,
-	)
+	lg := log.With().Str("module", "chunk_consumer").Logger()
+	consumer := jobqueue.NewConsumer(lg, jobs, processedIndex, worker, maxProcessing)
 
 	chunkConsumer := &ChunkConsumer{consumer}
 
@@ -49,6 +48,11 @@ func NewChunkConsumer(
 
 func (c *ChunkConsumer) NotifyJobIsDone(jobID module.JobID) {
 	c.consumer.NotifyJobIsDone(jobID)
+}
+
+// Size returns number of in-memory chunk jobs that chunk consumer is processing.
+func (c *ChunkConsumer) Size() uint {
+	return c.consumer.Size()
 }
 
 func (c ChunkConsumer) Check() {

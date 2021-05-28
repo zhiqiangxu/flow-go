@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 
+	"github.com/onflow/flow-go/cmd/build"
 	"github.com/onflow/flow-go/crypto"
 	"github.com/onflow/flow-go/fvm"
 	"github.com/onflow/flow-go/model/bootstrap"
@@ -173,13 +174,28 @@ func (fnb *FlowNodeBuilder) enqueueNetworkInit() {
 			myAddr = fnb.BaseConfig.bindAddr
 		}
 
+		// setup the Ping provider to return the software version and the finalized block height
+		pingProvider := p2p.PingInfoProviderImpl{
+			SoftwareVersionFun: func() string {
+				return build.Semver()
+			},
+			SealedBlockHeightFun: func() (uint64, error) {
+				head, err := fnb.State.Sealed().Head()
+				if err != nil {
+					return 0, err
+				}
+				return head.Height, nil
+			},
+		}
+
 		libP2PNodeFactory, err := p2p.DefaultLibP2PNodeFactory(fnb.Logger.Level(zerolog.ErrorLevel),
 			fnb.Me.NodeID(),
 			myAddr,
 			fnb.networkKey,
 			fnb.RootBlock.ID().String(),
 			p2p.DefaultMaxPubSubMsgSize,
-			fnb.Metrics.Network)
+			fnb.Metrics.Network,
+			pingProvider)
 		if err != nil {
 			return nil, fmt.Errorf("could not generate libp2p node factory: %w", err)
 		}
@@ -260,6 +276,10 @@ func (fnb *FlowNodeBuilder) parseAndPrintFlags() {
 	})
 
 	log.Msg("flags loaded")
+}
+
+func (fnb *FlowNodeBuilder) printBuildVersionDetails() {
+	fnb.Logger.Info().Str("version", build.Semver()).Str("commit", build.Commit()).Msg("build details")
 }
 
 func (fnb *FlowNodeBuilder) initNodeInfo() {
@@ -544,12 +564,13 @@ func (fnb *FlowNodeBuilder) initFvmOptions() {
 	vmOpts := []fvm.Option{
 		fvm.WithChain(fnb.RootChainID.Chain()),
 		fvm.WithBlocks(blockFinder),
+		fvm.WithAccountStorageLimit(true),
 	}
 	if fnb.RootChainID == flow.Testnet {
 		vmOpts = append(vmOpts,
 			fvm.WithRestrictedAccountCreation(false),
 			fvm.WithRestrictedDeployment(false),
-			fvm.WithAccountStorageLimit(true),
+			fvm.WithTransactionFeesEnabled(true),
 		)
 	}
 	fnb.FvmOptions = vmOpts
@@ -683,6 +704,8 @@ func (fnb *FlowNodeBuilder) Run() {
 	// initialize signal catcher
 	fnb.sig = make(chan os.Signal, 1)
 	signal.Notify(fnb.sig, os.Interrupt, syscall.SIGTERM)
+
+	fnb.printBuildVersionDetails()
 
 	fnb.parseAndPrintFlags()
 

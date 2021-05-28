@@ -5,12 +5,57 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/stretchr/testify/assert"
 
 	cryhash "github.com/onflow/flow-go/crypto/hash"
 	"github.com/onflow/flow-go/ledger"
 	"github.com/onflow/flow-go/ledger/common/hash"
 )
+
+func TestHash(t *testing.T) {
+	r := time.Now().UnixNano()
+	rand.Seed(r)
+	t.Logf("math rand seed is %d", r)
+
+	t.Run("lengthSanity", func(t *testing.T) {
+		assert.Equal(t, 32, hash.HashLen)
+	})
+
+	t.Run("HashLeaf", func(t *testing.T) {
+		var path hash.Hash
+
+		for i := 0; i < 5000; i++ {
+			value := make([]byte, i)
+			rand.Read(path[:])
+			rand.Read(value)
+			h := hash.HashLeaf(path, value)
+
+			hasher := sha3.New256()
+			_, _ = hasher.Write(path[:])
+			_, _ = hasher.Write(value)
+			expected := hasher.Sum(nil)
+			assert.Equal(t, []byte(expected), []byte(h[:]))
+		}
+	})
+
+	t.Run("HashInterNode", func(t *testing.T) {
+		var h1, h2 hash.Hash
+
+		for i := 0; i < 5000; i++ {
+			rand.Read(h1[:])
+			rand.Read(h2[:])
+			h := hash.HashInterNode(h1, h2)
+
+			hasher := sha3.New256()
+			_, _ = hasher.Write(h1[:])
+			_, _ = hasher.Write(h2[:])
+			expected := hasher.Sum(nil)
+			assert.Equal(t, []byte(expected), []byte(h[:]))
+		}
+	})
+}
 
 // Test_GetDefaultHashForHeight tests getting default hash for given heights
 func Test_GetDefaultHashForHeight(t *testing.T) {
@@ -44,45 +89,6 @@ func Test_ComputeCompactValue(t *testing.T) {
 	l3 := hash.HashInterNode(ledger.GetDefaultHashForHeight(l+2), l2)
 	result := ledger.ComputeCompactValue(path, v, nodeHeight)
 	assert.Equal(t, l3, result)
-}
-
-func TestHash(t *testing.T) {
-	r := time.Now().UnixNano()
-	rand.Seed(r)
-	t.Logf("math rand seed is %d", r)
-
-	t.Run("HashLeaf", func(t *testing.T) {
-		var path hash.Hash
-
-		for i := 0; i < 5000; i++ {
-			value := make([]byte, i)
-			rand.Read(path[:])
-			rand.Read(value)
-			h := hash.HashLeaf(path, value)
-
-			hasher := cryhash.NewSHA3_256()
-			_, _ = hasher.Write(path[:])
-			_, _ = hasher.Write(value)
-			expected := hasher.SumHash()
-			assert.Equal(t, []byte(expected), []byte(h[:]))
-		}
-	})
-
-	t.Run("HashInterNode", func(t *testing.T) {
-		var h1, h2 hash.Hash
-
-		for i := 0; i < 5000; i++ {
-			rand.Read(h1[:])
-			rand.Read(h2[:])
-			h := hash.HashInterNode(h1, h2)
-
-			hasher := cryhash.NewSHA3_256()
-			_, _ = hasher.Write(h1[:])
-			_, _ = hasher.Write(h2[:])
-			expected := hasher.SumHash()
-			assert.Equal(t, []byte(expected), []byte(h[:]))
-		}
-	})
 }
 
 func BenchmarkHash(b *testing.B) {

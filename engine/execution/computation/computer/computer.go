@@ -63,6 +63,7 @@ func NewBlockComputer(
 		vmCtx,
 		fvm.WithRestrictedAccountCreation(false),
 		fvm.WithRestrictedDeployment(false),
+		fvm.WithServiceEventCollectionEnabled(),
 		fvm.WithTransactionProcessors(fvm.NewTransactionInvocator(logger)),
 	)
 
@@ -205,8 +206,7 @@ func (e *blockComputer) executeSystemCollection(
 
 	serviceAddress := e.vmCtx.Chain.ServiceAddress()
 	tx := fvm.SystemChunkTransaction(serviceAddress)
-	txMetrics := fvm.NewMetricsCollector()
-	err := e.executeTransaction(tx, colSpan, txMetrics, collectionView, programs, e.systemChunkCtx, txIndex, res)
+	err := e.executeTransaction(tx, colSpan, collectionView, programs, e.systemChunkCtx, txIndex, res)
 	txIndex++
 	if err != nil {
 		return txIndex, err
@@ -241,10 +241,9 @@ func (e *blockComputer) executeCollection(
 		colSpan.Finish()
 	}()
 
-	txMetrics := fvm.NewMetricsCollector()
-	txCtx := fvm.NewContextFromParent(blockCtx, fvm.WithMetricsCollector(txMetrics), fvm.WithTracer(e.tracer))
+	txCtx := fvm.NewContextFromParent(blockCtx, fvm.WithMetricsReporter(e.metrics), fvm.WithTracer(e.tracer))
 	for _, txBody := range collection.Transactions {
-		err := e.executeTransaction(txBody, colSpan, txMetrics, collectionView, programs, txCtx, txIndex, res)
+		err := e.executeTransaction(txBody, colSpan, collectionView, programs, txCtx, txIndex, res)
 		txIndex++
 		if err != nil {
 			return txIndex, err
@@ -263,7 +262,6 @@ func (e *blockComputer) executeCollection(
 func (e *blockComputer) executeTransaction(
 	txBody *flow.TransactionBody,
 	colSpan opentracing.Span,
-	txMetrics *fvm.MetricsCollector,
 	collectionView state.View,
 	programs *programs.Programs,
 	ctx fvm.Context,
@@ -302,11 +300,6 @@ func (e *blockComputer) executeTransaction(
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
-	if e.metrics != nil {
-		e.metrics.TransactionParsed(txMetrics.Parsed())
-		e.metrics.TransactionChecked(txMetrics.Checked())
-		e.metrics.TransactionInterpreted(txMetrics.Interpreted())
-	}
 	txResult := flow.TransactionResult{
 		TransactionID: tx.ID,
 	}
@@ -327,11 +320,11 @@ func (e *blockComputer) executeTransaction(
 	mergeSpan := e.tracer.StartSpanFromParent(txSpan, trace.EXEMergeTransactionView)
 	defer mergeSpan.Finish()
 
-	if tx.Err == nil {
-		err := collectionView.MergeView(txView)
-		if err != nil {
-			return err
-		}
+	// always merge the view, fvm take cares of reverting changes
+	// of failed transaction invocation
+	err = collectionView.MergeView(txView)
+	if err != nil {
+		return fmt.Errorf("merging tx view to collection view failed: %w", err)
 	}
 
 	res.AddEvents(tx.Events)
