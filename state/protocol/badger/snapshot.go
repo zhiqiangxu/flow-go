@@ -425,6 +425,10 @@ func (s *Snapshot) Epochs() protocol.EpochQuery {
 	}
 }
 
+func (s *Snapshot) Params() protocol.GlobalParams {
+	return s.state.Params()
+}
+
 // EpochQuery encapsulates querying epochs w.r.t. a snapshot.
 type EpochQuery struct {
 	snap *Snapshot
