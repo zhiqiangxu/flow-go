@@ -238,6 +238,13 @@ func SnapshotFromBootstrapState(root *flow.Block, result *flow.ExecutionResult, 
 		Current: current.enc,
 	}
 
+	// create spork parameters deterministically from input root state
+	params := EncodableParams{
+		ChainID:         root.Header.ChainID,
+		SporkID:         root.ID(),
+		ProtocolVersion: 42,
+	}
+
 	snap := SnapshotFromEncodable(EncodableSnapshot{
 		Head:              root.Header,
 		Identities:        setup.Participants,
@@ -247,6 +254,7 @@ func SnapshotFromBootstrapState(root *flow.Block, result *flow.ExecutionResult, 
 		QuorumCertificate: qc,
 		Phase:             flow.EpochPhaseStaking,
 		Epochs:            epochs,
+		Params:            params,
 	})
 	return snap, nil
 }
