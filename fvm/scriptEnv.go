@@ -720,3 +720,19 @@ func (e *ScriptEnv) Commit() ([]programs.ContractUpdateKey, error) {
 	}
 	return e.contracts.Commit()
 }
+
+func (e *ScriptEnv) GetAccountContractNames(address runtime.Address) ([]string, error) {
+	accountAddress := flow.Address(address)
+	account, err := e.accounts.Get(accountAddress)
+
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, len(account.Contracts))
+	for name, _ := range account.Contracts {
+		names = append(names, name)
+	}
+
+	return names, nil
+}
