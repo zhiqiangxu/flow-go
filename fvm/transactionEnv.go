@@ -293,26 +293,24 @@ func (e *TransactionEnv) GetAccountBalance(address common.Address) (value uint64
 		defer sp.Finish()
 	}
 
-	script := Script(blueprints.GetFlowTokenBalanceScript(flow.BytesToAddress(address.Bytes()), e.ctx.Chain.ServiceAddress()))
-
-	// TODO similar to the one above
-	err = e.vm.Run(
-		e.ctx,
-		script,
-		e.sth.State().View(),
-		e.programs.Programs,
+	invoker := NewTransactionContractFunctionInvocator(
+		common.AddressLocation{Address: common.BytesToAddress(e.ctx.Chain.ServiceAddress().Bytes()), Name: flowServiceAccountContract},
+		"defaultTokenBalance",
+		[]interpreter.Value{
+			interpreter.NewAddressValue(common.BytesToAddress(address.Bytes())),
+		},
+		[]sema.Type{
+			sema.PublicAccountType,
+		},
+		e.ctx.Logger,
 	)
-	if err != nil {
-		return 0, err
-	}
 
-	var balance uint64
-	// TODO: Figure out how to handle this error. Currently if a runtime error occurs, balance will be 0.
-	if script.Err == nil {
-		balance = script.Value.ToGoValue().(uint64)
-	}
+	result, invokeErr := invoker.Invoke(e, e.traceSpan)
 
-	return balance, nil
+	if invokeErr != nil {
+		return 0, errors.HandleRuntimeError(invokeErr)
+	}
+	return result.ToGoValue().(uint64), nil
 }
 
 func (e *TransactionEnv) GetAccountAvailableBalance(address common.Address) (value uint64, err error) {
