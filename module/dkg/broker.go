@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onflow/flow-go/engine"
+
 	"github.com/sethvargo/go-retry"
 
 	"github.com/rs/zerolog"
@@ -31,6 +33,7 @@ const retryMilliseconds = 1000 * time.Millisecond
 type Broker struct {
 	sync.Mutex
 	log               zerolog.Logger
+	unit              *engine.Unit
 	dkgInstanceID     string                   // unique identifier of the current dkg run (prevent replay attacks)
 	committee         flow.IdentityList        // IDs of DKG members
 	me                module.Local             // used for signing bcast messages
@@ -57,6 +60,7 @@ func NewBroker(
 
 	b := &Broker{
 		log:               log.With().Str("component", "broker").Str("dkg_instance_id", dkgInstanceID).Logger(),
+		unit:              engine.NewUnit(),
 		dkgInstanceID:     dkgInstanceID,
 		committee:         committee,
 		me:                me,
@@ -116,18 +120,22 @@ func (b *Broker) Broadcast(data []byte) {
 	}
 	maxedExpRetry := retry.WithMaxRetries(retryMax, expRetry)
 
-	err = retry.Do(context.Background(), maxedExpRetry, func(ctx context.Context) error {
-		err := b.dkgContractClient.Broadcast(bcastMsg)
-		if err != nil {
-			b.log.Error().Err(err).Msg("error broadcasting DKG result, retrying")
-		}
-		return retry.RetryableError(err)
-	})
+	f := func() {
+		err = retry.Do(context.Background(), maxedExpRetry, func(ctx context.Context) error {
+			err := b.dkgContractClient.Broadcast(bcastMsg)
+			if err != nil {
+				b.log.Error().Err(err).Msg("error broadcasting, retrying")
+			}
+			return retry.RetryableError(err)
+		})
 
-	if err != nil {
-		b.log.Fatal().Err(err).Msg("failed to broadcast message")
+		if err != nil {
+			b.log.Error().Err(err).Msg("failed to broadcast message")
+		}
+		b.broadcasts++
 	}
-	b.broadcasts++
+
+	b.unit.Launch(f)
 }
 
 // Disqualify flags that a node is misbehaving and got disqualified

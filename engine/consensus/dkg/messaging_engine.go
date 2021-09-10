@@ -104,40 +104,57 @@ func (e *MessagingEngine) Process(_ network.Channel, originID flow.Identifier, e
 func (e *MessagingEngine) process(originID flow.Identifier, event interface{}) error {
 	switch v := event.(type) {
 	case *msg.DKGMessage:
-		e.tunnel.SendIn(
-			msg.PrivDKGMessageIn{
-				DKGMessage: *v,
-				OriginID:   originID,
-			},
-		)
+		// messages are forwarded async rather than sync, because otherwise the message queue
+		// might get full when it's slow to process DKG messages synchronously and impact 
+		// block rate.
+		e.forwardInboundMessageAsync(originID, v)
 		return nil
 	default:
 		return fmt.Errorf("invalid event type (%T)", event)
 	}
 }
 
+func (e *MessagingEngine) forwardInboundMessageAsync(originID flow.Identifier, message *msg.DKGMessage) {
+	e.unit.Launch(func() {
+		e.tunnel.SendIn(
+			msg.PrivDKGMessageIn{
+				DKGMessage: *message,
+				OriginID:   originID,
+			},
+		)
+	})
+}
+
 func (e *MessagingEngine) forwardOutgoingMessages() {
 	for {
 		select {
 		case msg := <-e.tunnel.MsgChOut:
-			expRetry, err := retry.NewExponential(retryMilliseconds)
-			if err != nil {
-				e.log.Fatal().Err(err).Msg("failed to create retry mechanism")
-			}
-
-			maxedExpRetry := retry.WithMaxRetries(retryMax, expRetry)
-			err = retry.Do(e.unit.Ctx(), maxedExpRetry, func(ctx context.Context) error {
-				err := e.conduit.Unicast(&msg.DKGMessage, msg.DestID)
-				if err != nil {
-					e.log.Err(err).Msg("error sending dkg message retrying")
-				}
-				return retry.RetryableError(err)
-			})
-			if err != nil {
-				e.log.Error().Err(err).Msg("error sending dkg message")
-			}
+			e.forwardOutboundMessageAsync(msg)
 		case <-e.unit.Quit():
 			return
 		}
 	}
+}
+
+func (e *MessagingEngine) forwardOutboundMessageAsync(message msg.PrivDKGMessageOut) {
+	f := func() {
+		expRetry, err := retry.NewExponential(retryMilliseconds)
+		if err != nil {
+			e.log.Fatal().Err(err).Msg("failed to create retry mechanism")
+		}
+
+		maxedExpRetry := retry.WithMaxRetries(retryMax, expRetry)
+		err = retry.Do(e.unit.Ctx(), maxedExpRetry, func(ctx context.Context) error {
+			err := e.conduit.Unicast(&message.DKGMessage, message.DestID)
+			if err != nil {
+				e.log.Warn().Err(err).Msg("error sending dkg message retrying")
+			}
+			return retry.RetryableError(err)
+		})
+		if err != nil {
+			e.log.Error().Err(err).Msg("error sending dkg message")
+		}
+	}
+
+	e.unit.Launch(f)
 }
