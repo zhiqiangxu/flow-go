@@ -3,6 +3,7 @@ package dkg
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/sethvargo/go-retry"
@@ -105,7 +106,7 @@ func (e *MessagingEngine) process(originID flow.Identifier, event interface{}) e
 	switch v := event.(type) {
 	case *msg.DKGMessage:
 		// messages are forwarded async rather than sync, because otherwise the message queue
-		// might get full when it's slow to process DKG messages synchronously and impact 
+		// might get full when it's slow to process DKG messages synchronously and impact
 		// block rate.
 		e.forwardInboundMessageAsync(originID, v)
 		return nil
@@ -138,6 +139,12 @@ func (e *MessagingEngine) forwardOutgoingMessages() {
 
 func (e *MessagingEngine) forwardOutboundMessageAsync(message msg.PrivDKGMessageOut) {
 	f := func() {
+		// POC: add a delay up to 10m for sending private messages, to spread out
+		// initial cost of DKG computations
+		delay := time.Duration(rand.Int63n(10)) * time.Minute
+		e.log.Info().Dur("delay", delay).Msg("waiting before sending outbound private dkg message")
+		time.Sleep(delay)
+
 		expRetry, err := retry.NewExponential(retryMilliseconds)
 		if err != nil {
 			e.log.Fatal().Err(err).Msg("failed to create retry mechanism")
