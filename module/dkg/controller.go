@@ -126,6 +126,8 @@ Implement DKGController
 // the protocol phases.
 func (c *Controller) Run() error {
 
+	c.log.Info().Msgf("running dkg size=%d, broadcast_base=%s, start_base=%s", c.dkg.Size(), c.config.BaseHandleBroadcastDelay, c.config.BaseStartDelay)
+
 	// Start DKG and transition to phase 1
 	err := c.start()
 	if err != nil {
@@ -280,9 +282,10 @@ func (c *Controller) doBackgroundWork() {
 			// random delay to avoid synchronizing this expensive operation across
 			// all consensus node
 			state := c.GetState()
+			c.log.Info().Msgf("about to process broadcast message phase=%s", state)
 			if state == Phase1 {
 				delay := c.preHandleBroadcastDelay()
-				c.log.Debug().Msgf("sleeping for %s before processing phase 1 broadcast message", delay)
+				c.log.Info().Msgf("sleeping for %s before processing phase 1 broadcast message", delay)
 				time.Sleep(delay)
 			}
 
@@ -308,7 +311,7 @@ func (c *Controller) start() error {
 	// before starting the DKG, sleep for a random delay to avoid synchronizing
 	// this expensive operation across all consensus nodes
 	delay := c.preStartDelay()
-	c.log.Debug().Msgf("sleeping for %s before processing phase 1 broadcast message", delay)
+	c.log.Info().Msgf("sleeping for %s before starting dkg", delay)
 	time.Sleep(delay)
 
 	c.dkgLock.Lock()
