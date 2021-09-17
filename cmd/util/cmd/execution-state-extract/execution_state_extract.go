@@ -91,6 +91,10 @@ func extractExecutionState(
 				Log:       log,
 				OutputDir: outputDir,
 			},
+			&mgr.PathReporter{
+				Log:       log,
+				OutputDir: outputDir,
+			},
 		}
 	}
 	newState, err := led.ExportCheckpointAt(
