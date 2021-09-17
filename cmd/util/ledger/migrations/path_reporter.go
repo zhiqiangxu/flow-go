@@ -172,8 +172,8 @@ func (r *PathReporter) handlePayload(p ledger.Payload, dataChan chan pathDataPoi
 
 	if composite, isComposite := cValue.(*interpreter.CompositeValue); isComposite {
 		typename = string(composite.TypeID())
-	}else {
-		typename = cValue.StaticType().String()
+	} else {
+		typename = "non-composite"
 	}
 
 	dataChan <- pathDataPoint{
