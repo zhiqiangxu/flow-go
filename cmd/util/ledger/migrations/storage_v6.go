@@ -61,6 +61,7 @@ type storageFormatV6MigrationResult struct {
 type encodingBaseStorage struct {
 	*atree.InMemBaseStorage
 	ReencodedPayloads []*ledger.Payload
+	migration         *StorageFormatV6Migration
 }
 
 var _ atree.BaseStorage = &encodingBaseStorage{}
@@ -73,8 +74,10 @@ func newEncodingBaseStorage() *encodingBaseStorage {
 }
 
 func (e *encodingBaseStorage) Store(id atree.StorageID, value []byte) error {
+
 	err := e.InMemBaseStorage.Store(id, value)
 	if err != nil {
+		panic(err)
 		return err
 	}
 
@@ -90,6 +93,12 @@ func (e *encodingBaseStorage) Store(id atree.StorageID, value []byte) error {
 		),
 	}
 
+	e.migration.Log.Info().Msgf(
+		"************** Key: %x %x %x",
+		payload.Key.KeyParts[0].Value,
+		payload.Key.KeyParts[1].Value,
+		payload.Key.KeyParts[2].Value,
+	)
 	e.ReencodedPayloads = append(e.ReencodedPayloads, &payload)
 
 	return nil
@@ -184,6 +193,8 @@ func (m *StorageFormatV6Migration) migrate(payloads []ledger.Payload) ([]ledger.
 	m.updateBrokenContracts(payloads)
 	m.Log.Info().Msg("Broken contracts updated")
 
+	payloads = m.filterPayloads(payloads)
+
 	m.Log.Info().Msg("Loading account contracts ...")
 	m.accounts = m.getContractsOnlyAccounts(payloads)
 	m.Log.Info().Msg("Loaded account contracts")
@@ -193,6 +204,7 @@ func (m *StorageFormatV6Migration) migrate(payloads []ledger.Payload) ([]ledger.
 	m.migratedPayloadPaths = make(map[storagePath]bool, 0)
 
 	baseStorage := newEncodingBaseStorage()
+	baseStorage.migration = m
 	m.initPersistentSlabStorage(baseStorage)
 
 	m.initNewInterpreter()
@@ -252,7 +264,7 @@ func (m *StorageFormatV6Migration) migrate(payloads []ledger.Payload) ([]ledger.
 		migratedPayloads = append(migratedPayloads, *payload)
 	}
 
-	m.completeProgress(err)
+	m.completeProgress()
 
 	m.Log.Info().Msg("Re-encoding converted values complete")
 
@@ -265,6 +277,8 @@ func (m *StorageFormatV6Migration) migrate(payloads []ledger.Payload) ([]ledger.
 		m.clearProgress()
 		m.Log.Warn().Msgf("values not migrated due to missing types: %d", m.missingTypeValues)
 	}
+
+	m.updateBrokenContracts(migratedPayloads)
 
 	return migratedPayloads, nil
 }
@@ -291,7 +305,7 @@ func (m *StorageFormatV6Migration) clearProgress() {
 	}
 }
 
-func (m *StorageFormatV6Migration) completeProgress(err error) {
+func (m *StorageFormatV6Migration) completeProgress() {
 	if m.progress == nil {
 		return
 	}
@@ -300,7 +314,7 @@ func (m *StorageFormatV6Migration) completeProgress(err error) {
 		return
 	}
 
-	err = m.progress.Finish()
+	err := m.progress.Finish()
 	if err != nil {
 		panic(err)
 	}
@@ -362,6 +376,10 @@ func (m *StorageFormatV6Migration) getDeferredKeys(payloads []ledger.Payload) ma
 	deferredValuePaths := make(map[storagePath]bool, 0)
 	for _, payload := range payloads {
 		m.incrementProgress()
+
+		//if true {
+		//	continue
+		//}
 
 		keyParts := payload.Key.KeyParts
 		rawOwner := keyParts[0].Value
@@ -490,6 +508,8 @@ func (m *StorageFormatV6Migration) reencodePayload(payload ledger.Payload) (*led
 		string(rawKey),
 	) {
 		return &payload, nil
+		//} else {
+		//	return nil, nil
 	}
 
 	value, version := oldInter.StripMagic(payload.Value)
@@ -557,6 +577,8 @@ func (m *StorageFormatV6Migration) decodeAndConvert(
 	if err != nil {
 		return err
 	}
+
+	m.Log.Info().Msgf("************* Going to convert: %s", rootValue.StaticType())
 
 	_ = m.converter.Convert(rootValue)
 
@@ -806,6 +828,32 @@ func (m *StorageFormatV6Migration) updateBrokenContracts(payloads []ledger.Paylo
 			m.Log.Info().Msg("contract updated: 1864ff317a35af46.FlowIDTableStaking")
 		}
 	}
+}
+
+func (m *StorageFormatV6Migration) filterPayloads(payloads []ledger.Payload) []ledger.Payload {
+	filteredPayloads := make([]ledger.Payload, 0)
+
+	for _, payload := range payloads {
+		owner := payload.Key.KeyParts[0].Value
+		controller := payload.Key.KeyParts[1].Value
+		key := payload.Key.KeyParts[2].Value
+
+		if state.IsFVMStateKey(
+			string(owner),
+			string(controller),
+			string(key),
+		) {
+			continue
+		}
+
+		ownerHex := hex.EncodeToString(owner)
+		if ownerHex == "8c5303eaa26202d6" && strings.Contains(string(key), "FlowServiceAccount") {
+			filteredPayloads = append(filteredPayloads, payload)
+			m.Log.Info().Msgf("*************** owner:%x  |  key: %s", string(owner), string(key))
+		}
+	}
+
+	return filteredPayloads
 }
 
 // migrationRuntimeInterface
@@ -1223,6 +1271,9 @@ func (c *ValueConverter) VisitUFix64Value(_ *oldInter.Interpreter, value oldInte
 }
 
 func (c *ValueConverter) VisitCompositeValue(_ *oldInter.Interpreter, value *oldInter.CompositeValue) bool {
+
+	c.migration.Log.Info().Msgf("************* Converting:  %s", value)
+
 	fields := make([]newInter.CompositeField, 0)
 
 	value.Fields().Foreach(func(key string, fieldVal oldInter.Value) {
@@ -1246,6 +1297,8 @@ func (c *ValueConverter) VisitCompositeValue(_ *oldInter.Interpreter, value *old
 		fields,
 		*value.Owner,
 	)
+
+	c.migration.Log.Info().Msgf("************* Converted:  %s", c.result)
 
 	// Do not descent
 	return false
