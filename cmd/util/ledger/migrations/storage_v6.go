@@ -61,7 +61,7 @@ type storagePath struct {
 type StorageFormatV6Migration struct {
 	Log        zerolog.Logger
 	OutputDir  string
-	accounts   *state.Accounts
+	accounts   state.Accounts
 	programs   *programs.Programs
 	reportFile *os.File
 	storage    *runtime.Storage
@@ -253,7 +253,7 @@ func (m *StorageFormatV6Migration) initPersistentSlabStorage(v *view) {
 	)
 }
 
-func (m *StorageFormatV6Migration) getAccounts(payloads []ledger.Payload) *state.Accounts {
+func (m *StorageFormatV6Migration) getAccounts(payloads []ledger.Payload) state.Accounts {
 	l := newView(payloads)
 	st := state.NewState(l)
 	sth := state.NewStateHolder(st)
@@ -686,7 +686,7 @@ func (m *StorageFormatV6Migration) updateBrokenContracts(payloads []ledger.Paylo
 // migrationRuntimeInterface
 
 type migrationRuntimeInterface struct {
-	accounts *state.Accounts
+	accounts state.Accounts
 	programs *programs.Programs
 }
 
