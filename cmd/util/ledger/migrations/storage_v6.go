@@ -110,7 +110,7 @@ func (m *StorageFormatV6Migration) migrate(payloads []ledger.Payload) ([]ledger.
 	m.Log.Info().Msg("Broken contracts updated")
 
 	m.Log.Info().Msg("Loading account contracts ...")
-	m.accounts = m.getContractsOnlyAccounts(payloads)
+	m.accounts = m.getAccounts(payloads)
 	m.Log.Info().Msg("Loaded account contracts")
 
 	m.programs = programs.NewEmptyPrograms()
@@ -253,20 +253,8 @@ func (m *StorageFormatV6Migration) initPersistentSlabStorage(v *view) {
 	)
 }
 
-func (m *StorageFormatV6Migration) getContractsOnlyAccounts(payloads []ledger.Payload) *state.Accounts {
-	var filteredPayloads []ledger.Payload
-
-	for _, payload := range payloads {
-		rawKey := string(payload.Key.KeyParts[2].Value)
-		if strings.HasPrefix(rawKey, "contract_names") ||
-			strings.HasPrefix(rawKey, "code.") ||
-			rawKey == "exists" {
-
-			filteredPayloads = append(filteredPayloads, payload)
-		}
-	}
-
-	l := newView(filteredPayloads)
+func (m *StorageFormatV6Migration) getAccounts(payloads []ledger.Payload) *state.Accounts {
+	l := newView(payloads)
 	st := state.NewState(l)
 	sth := state.NewStateHolder(st)
 	accounts := state.NewAccounts(sth)
@@ -985,8 +973,8 @@ func (c *ValueConverter) Convert(value oldInter.Value) (result newInter.Value) {
 			c.migration.reportFile.WriteString(
 				fmt.Sprintf(
 					"skipped migrating value: %s, owner: %s\n",
-					value.GetOwner(),
 					err.Error(),
+					value.GetOwner(),
 				),
 			)
 		case runtime.Error:
@@ -1173,7 +1161,7 @@ func (c *ValueConverter) VisitCompositeValue(_ *oldInter.Interpreter, value *old
 
 	c.result = newInter.NewCompositeValue(
 		c.newInter,
-		value.Location(),
+		compositeTypeLocation(value.Location()),
 		value.QualifiedIdentifier(),
 		value.Kind(),
 		fields,
@@ -1183,6 +1171,69 @@ func (c *ValueConverter) VisitCompositeValue(_ *oldInter.Interpreter, value *old
 	// Do not descent
 	return false
 }
+
+func compositeTypeLocation(location common.Location) common.Location {
+	addressLocation, ok := location.(common.AddressLocation)
+	if !ok {
+		return location
+	}
+
+	switch {
+	case strings.HasPrefix(addressLocation.Name, "FlowIDTableStaking"):
+		switch addressLocation.Address.Hex() {
+		case "e94f751ba094ef6a",
+			"ecda6c5746d5bdf0",
+			"f1a43bfd1354c9b8",
+			"16a5fe3b527633d4",
+			"76d9ea44cef09e20",
+			"9798362e92e5539a":
+			location = common.AddressLocation{
+				Address: testnetStakingContractAddress,
+				Name:    addressLocation.Name,
+			}
+		}
+	case strings.HasPrefix(addressLocation.Name, "KittyItems"):
+		switch addressLocation.Address.Hex() {
+		case "fcceff21d9532b58",
+			"17341c7824b030be",
+			"f79ee844bfa76528":
+			location = common.AddressLocation{
+				Address: testnetKittyItemsContractAddress,
+				Name:    addressLocation.Name,
+			}
+		}
+	}
+
+	return location
+}
+
+var testnetStakingContractAddress = func() common.Address {
+	address, err := hex.DecodeString("9eca2b38b18b5dfe")
+	if err != nil {
+		panic(err)
+	}
+
+	return common.BytesToAddress(address)
+}()
+
+var testnetKittyItemsContractAddress = func() common.Address {
+	// TODO: verify
+	address, err := hex.DecodeString("8c5244250369a9ce")
+	if err != nil {
+		panic(err)
+	}
+
+	return common.BytesToAddress(address)
+}()
+
+var testnetNonFungibleTokenContractAddress = func() common.Address {
+	address, err := hex.DecodeString("631e88ae7f1d7c20")
+	if err != nil {
+		panic(err)
+	}
+
+	return common.BytesToAddress(address)
+}()
 
 func (c *ValueConverter) VisitDictionaryValue(inter *oldInter.Interpreter, value *oldInter.DictionaryValue) bool {
 	staticType := ConvertStaticType(value.StaticType()).(newInter.DictionaryStaticType)
@@ -1315,12 +1366,22 @@ func (c *ValueConverter) VisitDeployedContractValue(_ *oldInter.Interpreter, _ o
 
 // Type conversions
 
-func ConvertStaticType(staticType oldInter.StaticType) newInter.StaticType {
+func ConvertStaticType(staticType oldInter.StaticType) (typ newInter.StaticType) {
 	switch typ := staticType.(type) {
 	case oldInter.CompositeStaticType:
-		return newInter.NewCompositeStaticType(typ.Location, typ.QualifiedIdentifier)
+		location := compositeTypeLocation(typ.Location)
+		return newInter.NewCompositeStaticType(location, typ.QualifiedIdentifier)
 
 	case oldInter.InterfaceStaticType:
+		// NonFungibleToken.NFT is a struct, but is stored as an interface type.
+		// Rectify this by returning a composite static type.
+		if location, ok := typ.Location.(common.AddressLocation); ok {
+			if location.Address == testnetNonFungibleTokenContractAddress &&
+				typ.QualifiedIdentifier == "NonFungibleToken.NFT" {
+				return newInter.NewCompositeStaticType(location, typ.QualifiedIdentifier)
+			}
+		}
+
 		return newInter.InterfaceStaticType{
 			Location:            typ.Location,
 			QualifiedIdentifier: typ.QualifiedIdentifier,
