@@ -925,7 +925,7 @@ func TestDeferredValues(t *testing.T) {
 		"storage\u001FMomentCollection",
 	)
 
-	require.IsType(t, result, &newInter.SomeValue{})
+	require.IsType(t, &newInter.SomeValue{}, result)
 	result = result.(*newInter.SomeValue).Value
 
 	require.IsType(t, &newInter.CompositeValue{}, result)
@@ -951,4 +951,106 @@ func TestDeferredValues(t *testing.T) {
 		result := dictionary.GetKey(migration.newInter, newInter.ReturnEmptyLocationRange, id)
 		require.NotNil(t, result)
 	}
+}
+
+func TestMissingDeferredValues(t *testing.T) {
+
+	var payloads []ledger.Payload
+
+	owner, err := hex.DecodeString("f1ea1d3470b1c4e7")
+	require.NoError(t, err)
+
+	data := map[string]string{
+		"storage\u001FNFTCollection":            "00cade0005d88484d8c08248e4e5f90bf7e2a25f6b4e465450726f766964657202846475756964d8a41a007883ad696f776e65644e465473d88183d8d982d8d41830d8d582d8c08248631e88ae7f1d7c20704e6f6e46756e6769626c65546f6b656e744e6f6e46756e6769626c65546f6b656e2e4e4654d88682d8d7d8d4183081d8a40e80764e465450726f76696465722e436f6c6c656374696f6e",
+		"public_key_0":                          "f849b8400381ffd7b454521e39e400e171270cc279b62e0f63a9e4c45330145b347e5eb0bfe576b1a650599f0cfcc295428ff49d81fdf73a27fdb7654ed8efee5b81c70503038203e78080",
+		"exists":                                "01",
+		//"storage\u001FstoreShowCaseStoragePath": "00cade0005d88484d8c08248e4e5f90bf7e2a25f6d53746f726553686f774361736502846475756964d8a41a007883b1666f7264657273d88183d8d982d8d41830d8d582d8c08248e4e5f90bf7e2a25f6953616c654f726465726f53616c654f726465722e4f72646572d88682d8d7d8d4183080807653746f726553686f77436173652e53686f7743617365",
+		"public_key_1":                          "f849b840e3e2ec64f5908bc2ce2ceb956af5ca3f420e58a6ea5386fd21ce752e78cda0992b30eb43c1ec620c0066c7f2e085678973288f0a7d457cf15bcda9ef4f01d6af03038203e80980",
+		"public_key_2":                          "f847b84058a577e560874f50c01fc9d3f8eae2a4cb320e2f26718f08de9f064d9356a2e5be71f882b89f50926c6fd6313ec798a66632035953e1966c94eb93cb4f69263d0303018080",
+		//"public\u001FNFTCollection":             "00cade0005d8cb82d8c882016d4e4654436f6c6c656374696f6ed8db82f4d8dc82d8d40581d8d682d8c08248631e88ae7f1d7c20704e6f6e46756e6769626c65546f6b656e78214e6f6e46756e6769626c65546f6b656e2e436f6c6c656374696f6e5075626c6963",
+		//"public_key_count":                      "03",
+		//"public\u001FflowTokenReceiver":         "00cade0005d8cb82d8c882016e666c6f77546f6b656e5661756c74d8db82f4d8dc82d8d582d8c082487e60df042a9c086869466c6f77546f6b656e6f466c6f77546f6b656e2e5661756c7481d8d682d8c082489a0766d93b6608b76d46756e6769626c65546f6b656e7646756e6769626c65546f6b656e2e5265636569766572",
+		//"public\u001FstoreShowCasePublicPath":   "00cade0005d8cb82d8c88201781873746f726553686f774361736553746f7261676550617468d8db82f4d8dc82d8d40581d8d682d8c08248e4e5f90bf7e2a25f6d53746f726553686f7743617365781c53746f726553686f77436173652e53686f77436173655075626c6963",
+		//"public\u001FflowTokenBalance":          "00cade0005d8cb82d8c882016e666c6f77546f6b656e5661756c74d8db82f4d8dc82d8d582d8c082487e60df042a9c086869466c6f77546f6b656e6f466c6f77546f6b656e2e5661756c7481d8d682d8c082489a0766d93b6608b76d46756e6769626c65546f6b656e7546756e6769626c65546f6b656e2e42616c616e6365",
+		"storage_used":                          "00000000000005fb",
+		//"storage\u001FflowTokenVault":           "00cade0005d88484d8c082487e60df042a9c086869466c6f77546f6b656e02846475756964d8a41a0078835b6762616c616e6365d8bc1b0000001748786ea06f466c6f77546f6b656e2e5661756c74",
+	}
+
+	for key, hexValue := range data {
+
+		value, err := hex.DecodeString(hexValue)
+		require.NoError(t, err)
+
+		var controller []byte
+
+		if key == fvmState.KeyPublicKeyCount ||
+			bytes.HasPrefix([]byte(key), []byte("public_key_")) ||
+			key == fvmState.KeyContractNames ||
+			bytes.HasPrefix([]byte(key), []byte(fvmState.KeyCode)) {
+
+			controller = owner
+		}
+
+		payloads = append(payloads, ledger.Payload{
+			Key: ledger.NewKey([]ledger.KeyPart{
+				ledger.NewKeyPart(state.KeyPartOwner, owner),
+				ledger.NewKeyPart(state.KeyPartController, controller),
+				ledger.NewKeyPart(state.KeyPartKey, []byte(key)),
+			}),
+			Value: value,
+		})
+	}
+
+	ledgerView := newView(payloads)
+
+	migration := &StorageFormatV6Migration{}
+	migration.initPersistentSlabStorage(ledgerView)
+	migration.initNewInterpreter()
+	migration.initOldInterpreter(payloads)
+
+	nftAddress, err := common.HexToAddress("631e88ae7f1d7c20")
+	require.NoError(t, err)
+
+	nftLocation := common.AddressLocation{
+		Address: nftAddress,
+		Name:    "NonFungibleToken",
+	}
+	nftType := &sema.CompositeType{
+		Location:   nftLocation,
+		Identifier: "NonFungibleToken.NFT",
+		Kind:       common.CompositeKindResource,
+	}
+
+	nftElaboration := sema.NewElaboration()
+	nftElaboration.CompositeTypes[nftType.ID()] = nftType
+
+	migration.programs = programs.NewEmptyPrograms()
+	migration.programs.Set(
+		nftLocation,
+		&newInter.Program{
+			Program:     &ast.Program{},
+			Elaboration: nftElaboration,
+		},
+		nil,
+	)
+
+	_, err = migration.migrate(payloads)
+	require.NoError(t, err)
+
+	var result newInter.Value = migration.newInter.ReadStored(
+		common.BytesToAddress(owner),
+		"storage\u001FNFTCollection",
+	)
+
+	require.IsType(t, &newInter.SomeValue{}, result)
+	result = result.(*newInter.SomeValue).Value
+
+	require.IsType(t, &newInter.CompositeValue{}, result)
+	composite := result.(*newInter.CompositeValue)
+
+	ownedNFTS := composite.GetField("ownedNFTs")
+	require.IsType(t, &newInter.DictionaryValue{}, ownedNFTS)
+	dictionary := ownedNFTS.(*newInter.DictionaryValue)
+
+	require.NotZero(t, dictionary.Count())
 }
