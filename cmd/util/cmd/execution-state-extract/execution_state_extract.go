@@ -57,7 +57,7 @@ func extractExecutionState(
 	}
 
 	migrations := []ledger.Migration{}
-	reporters := []ledger.Reporter{}
+	rs := []ledger.Reporter{}
 
 	if migrate {
 		storageFormatV5Migration := mgr.StorageFormatV5Migration{
@@ -78,25 +78,20 @@ func extractExecutionState(
 		}
 	}
 	if report {
-		reporters = []ledger.Reporter{
-			mgr.ContractReporter{
-				Log:       log,
-				OutputDir: outputDir,
-			},
-			mgr.StorageReporter{
-				Log:       log,
-				OutputDir: outputDir,
-			},
-			&mgr.BalanceReporter{
-				Log:       log,
-				OutputDir: outputDir,
+		reportFileWriterFactory := mgr.NewReportFileWriterFactory(outputDir, log)
+
+		rs = []ledger.Reporter{
+			&mgr.AccountReporter{
+				Log:   log,
+				Chain: flow.Mainnet.Chain(),
+				RWF:   reportFileWriterFactory,
 			},
 		}
 	}
 	newState, err := led.ExportCheckpointAt(
 		ledger.State(targetHash),
 		migrations,
-		reporters,
+		rs,
 		complete.DefaultPathFinderVersion,
 		outputDir,
 		bootstrap.FilenameWALRootCheckpoint,
