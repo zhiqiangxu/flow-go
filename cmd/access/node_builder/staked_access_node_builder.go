@@ -201,12 +201,12 @@ func (builder *StakedAccessNodeBuilder) initLibP2PFactory(ctx context.Context,
 	// The staked nodes act as the DHT servers
 	dhtOptions := []dht.Option{p2p.AsServer(true)}
 
-	psOpts := p2p.DefaultPubsubOptions(p2p.DefaultMaxPubSubMsgSize)
-	psOpts = append(psOpts, func(_ context.Context, h host.Host) (pubsub.Option, error) {
-		return pubsub.WithSubscriptionFilter(p2p.NewRoleBasedFilter(
-			h.ID(), builder.RootBlock.ID(), builder.IdentityProvider,
-		)), nil
-	})
+	psOpts := append(p2p.DefaultPubsubOptions(p2p.DefaultMaxPubSubMsgSize),
+		func(_ context.Context, h host.Host) (pubsub.Option, error) {
+			return pubsub.WithSubscriptionFilter(p2p.NewRoleBasedFilter(
+				h.ID(), builder.RootBlock.ID(), builder.IdentityProvider,
+			)), nil
+		})
 
 	myAddr := builder.NodeConfig.Me.Address()
 	if builder.BaseConfig.BindAddr != cmd.NotSet {

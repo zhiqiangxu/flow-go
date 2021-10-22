@@ -205,8 +205,7 @@ func (builder *UnstakedAccessNodeBuilder) initLibP2PFactory(ctx context.Context,
 		pis = append(pis, pi)
 	}
 
-	psOpts := p2p.DefaultPubsubOptions(p2p.DefaultMaxPubSubMsgSize)
-	psOpts = append(psOpts,
+	psOpts := append(p2p.DefaultPubsubOptions(p2p.DefaultMaxPubSubMsgSize),
 		func(_ context.Context, h host.Host) (pubsub.Option, error) {
 			return pubsub.WithSubscriptionFilter(p2p.NewRoleBasedFilter(
 				h.ID(), builder.RootBlock.ID(), builder.IdentityProvider,
@@ -231,6 +230,7 @@ func (builder *UnstakedAccessNodeBuilder) initLibP2PFactory(ctx context.Context,
 			SetDHTOptions(dhtOptions...).
 			SetLogger(builder.Logger).
 			SetResolver(resolver).
+			SetPubsubOptions(psOpts...).
 			SetStreamCompressor(streamFactory).
 			Build(ctx)
 		if err != nil {
