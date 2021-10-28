@@ -3,113 +3,53 @@
 package ingestion
 
 import (
+	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/atomic"
 
 	"github.com/onflow/flow-go/engine"
-	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/model/flow/filter"
-	mockmempool "github.com/onflow/flow-go/module/mempool/mock"
+	"github.com/onflow/flow-go/module/irrecoverable"
 	"github.com/onflow/flow-go/module/metrics"
 	mockmodule "github.com/onflow/flow-go/module/mock"
-	"github.com/onflow/flow-go/module/trace"
+	netint "github.com/onflow/flow-go/network"
 	"github.com/onflow/flow-go/network/mocknetwork"
-	"github.com/onflow/flow-go/state/protocol"
-	mockprotocol "github.com/onflow/flow-go/state/protocol/mock"
-	mockstorage "github.com/onflow/flow-go/storage/mock"
 	"github.com/onflow/flow-go/utils/unittest"
 )
 
-func TestIngestion(t *testing.T) {
+func TestIngestionEngine(t *testing.T) {
 	suite.Run(t, new(IngestionSuite))
 }
 
 type IngestionSuite struct {
-	suite.Suite
+	IngestionCoreSuite
 
-	con1ID flow.Identifier
-	con2ID flow.Identifier
-	con3ID flow.Identifier
-	collID flow.Identifier
-	execID flow.Identifier
-	head   *flow.Header
-
-	finalIdentities flow.IdentityList // identities at finalized state
-	refIdentities   flow.IdentityList // identities at reference block state
-
-	final *mockprotocol.Snapshot // finalized state snapshot
-	ref   *mockprotocol.Snapshot // state snapshot w.r.t. reference block
-
-	query   *mockprotocol.EpochQuery
-	epoch   *mockprotocol.Epoch
-	headers *mockstorage.Headers
-	pool    *mockmempool.Guarantees
-	conduit *mocknetwork.Conduit
+	con    *mocknetwork.Conduit
+	net    *mocknetwork.Network
+	cancel context.CancelFunc
 
 	ingest *Engine
 }
 
-func (suite *IngestionSuite) SetupTest() {
+func (s *IngestionSuite) SetupTest() {
+	s.IngestionCoreSuite.SetupTest()
 
-	head := unittest.BlockHeaderFixture()
-	head.Height = 2 * flow.DefaultTransactionExpiry
+	s.con = &mocknetwork.Conduit{}
 
-	con1 := unittest.IdentityFixture(unittest.WithRole(flow.RoleConsensus))
-	con2 := unittest.IdentityFixture(unittest.WithRole(flow.RoleConsensus))
-	con3 := unittest.IdentityFixture(unittest.WithRole(flow.RoleConsensus))
-	coll := unittest.IdentityFixture(unittest.WithRole(flow.RoleCollection))
-	exec := unittest.IdentityFixture(unittest.WithRole(flow.RoleExecution))
-
-	suite.con1ID = con1.NodeID
-	suite.con2ID = con2.NodeID
-	suite.con3ID = con3.NodeID
-	suite.collID = coll.NodeID
-	suite.execID = exec.NodeID
-
-	clusters := flow.ClusterList{flow.IdentityList{coll}}
-
-	identities := flow.IdentityList{con1, con2, con3, coll, exec}
-	suite.finalIdentities = identities.Copy()
-	suite.refIdentities = identities.Copy()
-
-	metrics := metrics.NewNoopCollector()
-	tracer := trace.NewNoopTracer()
-	state := &mockprotocol.State{}
-	final := &mockprotocol.Snapshot{}
-	ref := &mockprotocol.Snapshot{}
-	suite.query = &mockprotocol.EpochQuery{}
-	suite.epoch = &mockprotocol.Epoch{}
-	headers := &mockstorage.Headers{}
-	me := &mockmodule.Local{}
-	pool := &mockmempool.Guarantees{}
-	con := &mocknetwork.Conduit{}
-
-	// this state basically works like a normal protocol state
-	// returning everything correctly, using the created header
-	// as head of the protocol state
-	state.On("Final").Return(final)
-	final.On("Head").Return(&head, nil)
-	final.On("Identity", mock.Anything).Return(
-		func(nodeID flow.Identifier) *flow.Identity {
-			identity, _ := suite.finalIdentities.ByNodeID(nodeID)
-			return identity
-		},
-		func(nodeID flow.Identifier) error {
-			_, ok := suite.finalIdentities.ByNodeID(nodeID)
-			if !ok {
-				return protocol.IdentityNotFoundError{NodeID: nodeID}
-			}
-			return nil
-		},
-	)
-	final.On("Identities", mock.Anything).Return(
-		func(selector flow.IdentityFilter) flow.IdentityList {
-			return suite.finalIdentities.Filter(selector)
+	// set up network module mock
+	s.net = &mocknetwork.Network{}
+	s.net.On("Register", engine.ReceiveGuarantees, mock.Anything).Return(
+		func(channel netint.Channel, engine netint.Engine) netint.Conduit {
+			return s.con
 		},
 		nil,
 	)
+<<<<<<< HEAD
 	ref.On("Epochs").Return(suite.query)
 	suite.query.On("Current").Return(suite.epoch)
 	suite.epoch.On("Clustering").Return(clusters, nil)
@@ -387,21 +327,47 @@ func (suite *IngestionSuite) TestOnGuaranteeEpochEnd() {
 	// we should not propagate the guarantee
 	suite.conduit.AssertNotCalled(suite.T(), "Multicast", guarantee, mock.Anything, mock.Anything)
 	suite.conduit.AssertNotCalled(suite.T(), "Publish", guarantee, mock.Anything)
+=======
+
+	// setup my own identity
+	me := &mockmodule.Local{}
+	me.On("NodeID").Return(s.conID) // we use the first consensus node as our local identity
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	signalerCtx, _ := irrecoverable.WithSignaler(ctx)
+
+	metrics := metrics.NewNoopCollector()
+	ingest, err := New(unittest.Logger(), metrics, s.net, me, s.core)
+	require.NoError(s.T(), err)
+	s.ingest = ingest
+	s.ingest.Start(signalerCtx)
+	<-s.ingest.Ready()
 }
 
-func (suite *IngestionSuite) TestOnGuaranteeUnknownOrigin() {
+func (s *IngestionSuite) TearDownTest() {
+	s.cancel()
+	<-s.ingest.Done()
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
+}
 
-	guarantee := suite.validGuarantee()
+func (s *IngestionSuite) TestSubmittingMultipleEntries() {
+	originID := s.collID
+	count := uint64(15)
 
-	// the guarantee is not part of the memory pool
-	suite.pool.On("Has", guarantee.ID()).Return(false)
-	suite.pool.On("Add", guarantee).Return(true)
+	processed := atomic.NewUint64(0)
 
-	// submit the guarantee with an unknown origin
-	err := suite.ingest.onGuarantee(unittest.IdentifierFixture(), guarantee)
-	suite.Assert().Error(err)
-	suite.Assert().True(engine.IsInvalidInputError(err))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for i := 0; i < int(count); i++ {
+			guarantee := s.validGuarantee()
+			s.pool.On("Has", guarantee.ID()).Return(false)
+			s.pool.On("Add", guarantee).Run(func(args mock.Arguments) {
+				processed.Add(1)
+			}).Return(true)
 
+<<<<<<< HEAD
 	suite.pool.AssertNotCalled(suite.T(), "Add", guarantee)
 
 	// we should not propagate the guarantee
@@ -415,4 +381,19 @@ func (suite *IngestionSuite) validGuarantee() *flow.CollectionGuarantee {
 	guarantee.SignerIDs = []flow.Identifier{suite.collID}
 	guarantee.ReferenceBlockID = suite.head.ID()
 	return guarantee
+=======
+			// execute the vote submission
+			_ = s.ingest.Process(engine.ProvideCollections, originID, guarantee)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	require.Eventually(s.T(), func() bool {
+		return processed.Load() == count
+	}, time.Millisecond*200, time.Millisecond*20)
+
+	s.pool.AssertExpectations(s.T())
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 }

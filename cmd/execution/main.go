@@ -11,7 +11,10 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+<<<<<<< HEAD
 	"github.com/onflow/cadence/runtime"
+=======
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	"github.com/spf13/pflag"
 
 	"github.com/onflow/flow-go/engine/execution/computation/computer/uploader"
@@ -140,7 +143,10 @@ func main() {
 			flags.BoolVar(&pauseExecution, "pause-execution", false, "pause the execution. when set to true, no block will be executed, but still be able to serve queries")
 			flags.BoolVar(&enableBlockDataUpload, "enable-blockdata-upload", false, "enable uploading block data to Cloud Bucket")
 			flags.StringVar(&gcpBucketName, "gcp-bucket-name", "", "GCP Bucket name for block data uploader")
+<<<<<<< HEAD
 			flags.BoolVar(&atreeValidationEnabled, "atree-validation", false, "validates all atree values after mutations")
+=======
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 			flags.StringVar(&s3BucketName, "s3-bucket-name", "", "S3 Bucket name for block data uploader")
 		}).
 		ValidateFlags(func() error {
@@ -230,6 +236,7 @@ func main() {
 				if err != nil {
 					return nil, fmt.Errorf("failed to load AWS configuration: %w", err)
 				}
+<<<<<<< HEAD
 
 				client := s3.NewFromConfig(config)
 				s3Uploader := uploader.NewS3Uploader(
@@ -247,6 +254,25 @@ func main() {
 				)
 				blockDataUploaders = append(blockDataUploaders, asyncUploader)
 
+=======
+
+				client := s3.NewFromConfig(config)
+				s3Uploader := uploader.NewS3Uploader(
+					ctx,
+					client,
+					s3BucketName,
+					logger,
+				)
+				asyncUploader := uploader.NewAsyncUploader(
+					s3Uploader,
+					blockdataUploaderRetryTimeout,
+					blockDataUploaderMaxRetry,
+					logger,
+					collector,
+				)
+				blockDataUploaders = append(blockDataUploaders, asyncUploader)
+
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 				return asyncUploader, nil
 			}
 

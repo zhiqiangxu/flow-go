@@ -155,6 +155,7 @@ func main() {
 
 	fmt.Println("Node bootstrapping data generated...")
 
+<<<<<<< HEAD
 	// gather access node IDS for LN/SN nodes
 	accessNodeIDS := make([]string, 0)
 	for i, c := range containers {
@@ -172,6 +173,9 @@ func main() {
 
 	anIDS := strings.Join(accessNodeIDS, ",")
 	services := prepareServices(containers, anIDS)
+=======
+	services := prepareServices(containers)
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 
 	err = writeDockerComposeConfig(services)
 	if err != nil {
@@ -259,7 +263,11 @@ type Build struct {
 	Target     string
 }
 
+<<<<<<< HEAD
 func prepareServices(containers []testnet.ContainerConfig, accessNodeIDS string) Services {
+=======
+func prepareServices(containers []testnet.ContainerConfig) Services {
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	services := make(Services)
 
 	var (
@@ -276,14 +284,20 @@ func prepareServices(containers []testnet.ContainerConfig, accessNodeIDS string)
 			services[container.ContainerName] = prepareConsensusService(
 				container,
 				numConsensus,
+<<<<<<< HEAD
 				accessNodeIDS,
+=======
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 			)
 			numConsensus++
 		case flow.RoleCollection:
 			services[container.ContainerName] = prepareCollectionService(
 				container,
 				numCollection,
+<<<<<<< HEAD
 				accessNodeIDS,
+=======
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 			)
 			numCollection++
 		case flow.RoleExecution:
@@ -377,7 +391,11 @@ func prepareService(container testnet.ContainerConfig, i int) Service {
 }
 
 // NOTE: accessNodeIDS is a comma separated list of access node IDS
+<<<<<<< HEAD
 func prepareConsensusService(container testnet.ContainerConfig, i int, accessNodeIDS string) Service {
+=======
+func prepareConsensusService(container testnet.ContainerConfig, i int) Service {
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	service := prepareService(container, i)
 
 	timeout := 1200*time.Millisecond + consensusDelay
@@ -389,7 +407,11 @@ func prepareConsensusService(container testnet.ContainerConfig, i int, accessNod
 		fmt.Sprintf("--chunk-alpha=1"),
 		fmt.Sprintf("--emergency-sealing-active=false"),
 		fmt.Sprintf("--insecure-access-api=false"),
+<<<<<<< HEAD
 		fmt.Sprintf("--access-node-ids=%s", accessNodeIDS),
+=======
+		fmt.Sprint("--access-node-ids=*"),
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	)
 
 	return service
@@ -407,7 +429,11 @@ func prepareVerificationService(container testnet.ContainerConfig, i int) Servic
 }
 
 // NOTE: accessNodeIDS is a comma separated list of access node IDS
+<<<<<<< HEAD
 func prepareCollectionService(container testnet.ContainerConfig, i int, accessNodeIDS string) Service {
+=======
+func prepareCollectionService(container testnet.ContainerConfig, i int) Service {
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	service := prepareService(container, i)
 
 	timeout := 1200*time.Millisecond + collectionDelay
@@ -418,7 +444,11 @@ func prepareCollectionService(container testnet.ContainerConfig, i int, accessNo
 		fmt.Sprintf("--hotstuff-min-timeout=%s", timeout),
 		fmt.Sprintf("--ingress-addr=%s:%d", container.ContainerName, RPCPort),
 		fmt.Sprintf("--insecure-access-api=false"),
+<<<<<<< HEAD
 		fmt.Sprintf("--access-node-ids=%s", accessNodeIDS),
+=======
+		fmt.Sprint("--access-node-ids=*"),
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	)
 
 	return service

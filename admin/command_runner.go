@@ -18,13 +18,25 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/onflow/flow-go/admin/admin"
+	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 )
 
+<<<<<<< HEAD
+=======
+var _ component.Component = (*CommandRunner)(nil)
+
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 const CommandRunnerShutdownTimeout = 5 * time.Second
 
-type CommandHandler func(ctx context.Context, data map[string]interface{}) error
-type CommandValidator func(data map[string]interface{}) error
+type CommandHandler func(ctx context.Context, request *CommandRequest) error
+type CommandValidator func(request *CommandRequest) error
 type CommandRunnerOption func(*CommandRunner)
+
+type CommandRequest struct {
+	Data          map[string]interface{}
+	ValidatorData interface{}
+}
 
 func WithTLS(config *tls.Config) CommandRunnerOption {
 	return func(r *CommandRunner) {
@@ -58,7 +70,6 @@ func (r *CommandRunnerBootstrapper) Bootstrap(logger zerolog.Logger, bindAddress
 		httpAddress:      bindAddress,
 		logger:           logger.With().Str("admin", "command_runner").Logger(),
 		startupCompleted: make(chan struct{}),
-		errors:           make(chan error),
 	}
 
 	for _, opt := range opts {
@@ -92,8 +103,6 @@ type CommandRunner struct {
 	tlsConfig   *tls.Config
 	logger      zerolog.Logger
 
-	errors chan error
-
 	// wait for worker routines to be ready
 	workersStarted sync.WaitGroup
 
@@ -112,14 +121,16 @@ func (r *CommandRunner) getValidator(command string) CommandValidator {
 	return r.validators[command]
 }
 
-func (r *CommandRunner) Start(ctx context.Context) error {
+func (r *CommandRunner) Start(ctx irrecoverable.SignalerContext) {
 	if err := r.runAdminServer(ctx); err != nil {
+<<<<<<< HEAD
 		return fmt.Errorf("failed to start admin server: %w", err)
+=======
+		ctx.Throw(fmt.Errorf("failed to start admin server: %w", err))
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	}
 
 	close(r.startupCompleted)
-
-	return nil
 }
 
 func (r *CommandRunner) Ready() <-chan struct{} {
@@ -146,11 +157,7 @@ func (r *CommandRunner) Done() <-chan struct{} {
 	return done
 }
 
-func (r *CommandRunner) Errors() <-chan error {
-	return r.errors
-}
-
-func (r *CommandRunner) runAdminServer(ctx context.Context) error {
+func (r *CommandRunner) runAdminServer(ctx irrecoverable.SignalerContext) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -175,7 +182,7 @@ func (r *CommandRunner) runAdminServer(ctx context.Context) error {
 
 		if err := grpcServer.Serve(listener); err != nil {
 			r.logger.Err(err).Msg("gRPC server encountered fatal error")
-			r.errors <- err
+			ctx.Throw(err)
 		}
 	}()
 
@@ -210,7 +217,7 @@ func (r *CommandRunner) runAdminServer(ctx context.Context) error {
 
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			r.logger.Err(err).Msg("HTTP server encountered error")
-			r.errors <- err
+			ctx.Throw(err)
 		}
 	}()
 
@@ -231,7 +238,7 @@ func (r *CommandRunner) runAdminServer(ctx context.Context) error {
 
 			if err := httpServer.Shutdown(shutdownCtx); err != nil {
 				r.logger.Err(err).Msg("failed to shutdown http server")
-				r.errors <- err
+				ctx.Throw(err)
 			}
 		}
 	}()
@@ -242,14 +249,24 @@ func (r *CommandRunner) runAdminServer(ctx context.Context) error {
 func (r *CommandRunner) runCommand(ctx context.Context, command string, data map[string]interface{}) error {
 	r.logger.Info().Str("command", command).Msg("received new command")
 
+<<<<<<< HEAD
 	if validator := r.getValidator(command); validator != nil {
 		if validationErr := validator(data); validationErr != nil {
+=======
+	req := &CommandRequest{Data: data}
+	if validator := r.getValidator(command); validator != nil {
+		if validationErr := validator(req); validationErr != nil {
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 			return status.Error(codes.InvalidArgument, validationErr.Error())
 		}
 	}
 
 	if handler := r.getHandler(command); handler != nil {
+<<<<<<< HEAD
 		if handleErr := handler(ctx, data); handleErr != nil {
+=======
+		if handleErr := handler(ctx, req); handleErr != nil {
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 			if errors.Is(handleErr, context.Canceled) {
 				return status.Error(codes.Canceled, "client canceled")
 			} else if errors.Is(handleErr, context.DeadlineExceeded) {

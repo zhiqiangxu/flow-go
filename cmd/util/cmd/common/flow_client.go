@@ -34,6 +34,7 @@ func (f *FlowClientConfig) String() string {
 func NewFlowClientConfig(accessAddress, accessApiNodePubKey string, insecure bool) (*FlowClientConfig, error) {
 	if accessAddress == "" {
 		return nil, fmt.Errorf("failed to create  flow client connection option invalid access address: %s", accessAddress)
+<<<<<<< HEAD
 	}
 
 	if !insecure {
@@ -51,6 +52,25 @@ func FlowClient(opt *FlowClientConfig) (*client.Client, error) {
 		return insecureFlowClient(opt.AccessAddress)
 	}
 
+=======
+	}
+
+	if !insecure {
+		if accessApiNodePubKey == "" {
+			return nil, fmt.Errorf("failed to create flow client connection option invalid access node networking public key: %s", accessApiNodePubKey)
+		}
+	}
+
+	return &FlowClientConfig{accessAddress, accessApiNodePubKey, insecure}, nil
+}
+
+// FlowClient will return a secure or insecure flow client depending on *FlowClientConfig.Insecure
+func FlowClient(opt *FlowClientConfig) (*client.Client, error) {
+	if opt.Insecure {
+		return insecureFlowClient(opt.AccessAddress)
+	}
+
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	return secureFlowClient(opt.AccessAddress, opt.AccessNodePubKey)
 }
 
@@ -82,6 +102,7 @@ func insecureFlowClient(accessAddress string) (*client.Client, error) {
 }
 
 // FlowClientConfigs will assemble connection options for the flow client for each access node id
+<<<<<<< HEAD
 func FlowClientConfigs(accessNodeIDS []string, insecureAccessAPI bool, snapshot protocol.Snapshot) ([]*FlowClientConfig, error) {
 	flowClientOpts := make([]*FlowClientConfig, 0)
 
@@ -101,6 +122,16 @@ func FlowClientConfigs(accessNodeIDS []string, insecureAccessAPI bool, snapshot 
 		return nil, fmt.Errorf("failed get identities access node identities (ids=%v) from snapshot: %w", accessNodeIDS, err)
 	}
 	identities = identities.Sort(order.ByReferenceOrder(anIDS))
+=======
+func FlowClientConfigs(accessNodeIDS []flow.Identifier, insecureAccessAPI bool, snapshot protocol.Snapshot) ([]*FlowClientConfig, error) {
+	flowClientOpts := make([]*FlowClientConfig, 0)
+
+	identities, err := snapshot.Identities(filter.HasNodeID(accessNodeIDS...))
+	if err != nil {
+		return nil, fmt.Errorf("failed get identities access node identities (ids=%v) from snapshot: %w", accessNodeIDS, err)
+	}
+	identities = identities.Sort(order.ByReferenceOrder(accessNodeIDS))
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 
 	// make sure we have identities for all the access node IDs provided
 	if len(identities) != len(accessNodeIDS) {
@@ -139,3 +170,37 @@ func convertAccessAddrFromState(address string, insecureAccessAPI bool) string {
 
 	return accessAddress.String()
 }
+<<<<<<< HEAD
+=======
+
+// DefaultAccessNodeIDS will return all the access node IDS in the protocol state for staked access nodes
+func DefaultAccessNodeIDS(snapshot protocol.Snapshot) ([]flow.Identifier, error) {
+	identities, err := snapshot.Identities(filter.HasRole(flow.RoleAccess))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get staked access node IDs from protocol state %w", err)
+	}
+
+	// sanity check something went wrong if no access node IDs are returned
+	if len(identities) == 0 {
+		return nil, fmt.Errorf("faled to get any access node IDs from protocol state")
+	}
+
+	return identities.NodeIDs(), nil
+}
+
+// FlowIDFromHexString convert flow node id(s) from hex string(s) to flow identifier(s)
+func FlowIDFromHexString(accessNodeIDS ...string) ([]flow.Identifier, error) {
+	// convert all IDS to flow.Identifier type, fail early if ID is invalid
+	anIDS := make([]flow.Identifier, 0)
+	for _, anID := range accessNodeIDS {
+		id, err := flow.HexStringToIdentifier(anID)
+		if err != nil {
+			return nil, fmt.Errorf("could not get flow identifer from secured access node id (%s): %w", id, err)
+		}
+
+		anIDS = append(anIDS, id)
+	}
+
+	return anIDS, nil
+}
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802

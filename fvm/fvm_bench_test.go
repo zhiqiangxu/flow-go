@@ -435,7 +435,11 @@ func BenchRunNFTBatchTransfer(b *testing.B,
 	// Transfer NFTs
 	transferTx := []byte(fmt.Sprintf(TransferTxTemplate, accounts[0].Address.Hex(), accounts[1].Address.Hex()))
 
+<<<<<<< HEAD
 	encodedAddress, err := jsoncdc.Encode(cadence.BytesToAddress(accounts[2].Address.Bytes()))
+=======
+	encodedAddress, err := jsoncdc.Encode(cadence.Address(accounts[2].Address))
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 	require.NoError(b, err)
 
 	var computationResult *execution.ComputationResult
@@ -559,7 +563,11 @@ func fundAccounts(b *testing.B, be TestBenchBlockExecutor, value cadence.UFix64,
 		txBody := transferTokensTx(be.Chain(b))
 		txBody.SetProposalKey(serviceAccount.Address, 0, serviceAccount.RetAndIncSeqNumber())
 		txBody.AddArgument(jsoncdc.MustEncode(value))
+<<<<<<< HEAD
 		txBody.AddArgument(jsoncdc.MustEncode(cadence.BytesToAddress(a.Bytes())))
+=======
+		txBody.AddArgument(jsoncdc.MustEncode(cadence.Address(a)))
+>>>>>>> 02def6ea5f686f5a6c5cfddcc230cc3e66e1d802
 		txBody.AddAuthorizer(serviceAccount.Address)
 		txBody.SetPayer(serviceAccount.Address)
 
