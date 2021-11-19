@@ -13,11 +13,12 @@ import (
 
 // all route names
 const (
-	getTransactionByIDRoute = "getTransactionByID"
-	createTransactionRoute  = "createTransaction"
-	getBlocksByIDRoute      = "getBlocksByID"
-	getBlocksByHeightRoute  = "getBlocksByHeightRoute"
-	getCollectionByIDRoute  = "getCollectionByIDRoute"
+	getTransactionByIDRoute   = "getTransactionByID"
+	createTransactionRoute    = "createTransaction"
+	getBlocksByIDRoute        = "getBlocksByID"
+	getBlocksByHeightRoute    = "getBlocksByHeightRoute"
+	getCollectionByIDRoute    = "getCollectionByIDRoute"
+	getTransactionResultRoute = "getTransactionResultByID"
 )
 
 // NewServer returns an HTTP server initialized with the REST API handler

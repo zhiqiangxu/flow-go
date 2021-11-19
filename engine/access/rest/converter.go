@@ -3,6 +3,7 @@ package rest
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/onflow/flow-go/access"
 	"regexp"
 	"strings"
 
@@ -175,6 +176,56 @@ func transactionSignatureResponse(signatures []flow.TransactionSignature) []gene
 	}
 
 	return sigs
+}
+
+func eventResponse(event flow.Event) generated.Event {
+	return generated.Event{
+		Type_:            string(event.Type),
+		TransactionId:    event.TransactionID.String(),
+		TransactionIndex: int32(event.TransactionIndex),
+		EventIndex:       int32(event.EventIndex),
+		Payload:          string(event.Payload),
+	}
+}
+
+func eventsResponse(events []flow.Event) []generated.Event {
+	eventsRes := make([]generated.Event, len(events))
+	for i, e := range events {
+		eventsRes[i] = eventResponse(e)
+	}
+
+	return eventsRes
+}
+
+func statusResponse(status flow.TransactionStatus) generated.TransactionStatus {
+	switch status {
+	case flow.TransactionStatusExpired:
+		return generated.EXPIRED
+	case flow.TransactionStatusExecuted:
+		return generated.EXECUTED
+	case flow.TransactionStatusFinalized:
+		return generated.FINALIZED
+	case flow.TransactionStatusSealed:
+		return generated.SEALED
+	case flow.TransactionStatusPending:
+		return generated.PENDING
+	default:
+		return ""
+	}
+}
+
+func transactionResultResponse(txr *access.TransactionResult) *generated.TransactionResult {
+	status := statusResponse(txr.Status)
+
+	return &generated.TransactionResult{
+		BlockId:         txr.BlockID.String(),
+		Status:          &status,
+		ErrorMessage:    txr.ErrorMessage,
+		ComputationUsed: int32(0),
+		Events:          eventsResponse(txr.Events),
+		Expandable:      nil,
+		Links:           nil,
+	}
 }
 
 func transactionResponse(tx *flow.TransactionBody) *generated.Transaction {
