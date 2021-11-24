@@ -203,7 +203,9 @@ func (builder *FlowAccessNodeBuilder) buildFollowerState() *FlowAccessNodeBuilde
 
 func (builder *FlowAccessNodeBuilder) buildSyncCore() *FlowAccessNodeBuilder {
 	builder.Module("sync core", func(_ cmd.NodeBuilder, node *cmd.NodeConfig) error {
-		syncCore, err := synchronization.New(node.Logger, synchronization.DefaultConfig())
+		config := synchronization.DefaultConfig()
+		config.MaxRequests = 6
+		syncCore, err := synchronization.New(node.Logger, config)
 		builder.SyncCore = syncCore
 
 		return err

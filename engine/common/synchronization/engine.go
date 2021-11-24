@@ -3,6 +3,7 @@
 package synchronization
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
@@ -291,7 +292,20 @@ func (e *Engine) onSyncResponse(originID flow.Identifier, res *messages.SyncResp
 
 // onBlockResponse processes a response containing a specifically requested block.
 func (e *Engine) onBlockResponse(originID flow.Identifier, res *messages.BlockResponse) {
-	e.log.Debug().Str("origin_id", originID.String()).Msg("received block response")
+	var heights []uint64
+	var ids []flow.Identifier
+	var headers []*flow.Header
+	for _, blk := range res.Blocks {
+		heights = append(heights, blk.Header.Height)
+		ids = append(ids, blk.ID())
+		headers = append(headers, blk.Header)
+	}
+	data, _ := json.Marshal(headers)
+	e.log.Debug().
+		Str("headers", string(data)).
+		Msg("received block response")
+		// Str("origin_id", originID.String()).
+		// Str("block_heightss", fmt.Sprintf("%v", heights)).
 	// process the blocks one by one
 	for _, block := range res.Blocks {
 		if !e.core.HandleBlock(block.Header) {
@@ -331,6 +345,10 @@ CheckLoop:
 			e.pollHeight()
 		case <-scan.C:
 			head := e.finalizedHeader.Get()
+			e.log.Debug().
+				Str("latest_finalized_height", fmt.Sprintf("%v", head.Height)).
+				Str("latest_finalized_id", head.ID().String()).
+				Msg("get finalized header")
 			participants := e.participantsProvider.Identifiers()
 			ranges, batches := e.core.ScanPending(head)
 			e.sendRequests(participants, ranges, batches)
