@@ -571,11 +571,14 @@ func accountResponse(account *flow.Account) generated.Account {
 	}
 
 	return generated.Account{
-		Address:    account.Address.String(),
-		Balance:    int32(account.Balance),
-		Keys:       accountKeysResponse(account.Keys),
-		Contracts:  contracts,
-		Expandable: nil,
-		Links:      nil,
+		Address:   account.Address.String(),
+		Balance:   int32(account.Balance),
+		Keys:      accountKeysResponse(account.Keys),
+		Contracts: contracts,
+		Expandable: &generated.AccountExpandable{
+			Keys:      "keys",
+			Contracts: "contracts",
+		},
+		Links: accountLink(account.Address),
 	}
 }

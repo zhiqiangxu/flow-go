@@ -42,8 +42,7 @@ func TestGetAccount(t *testing.T) {
 			expected := fmt.Sprintf(`{
 			   "address":"%s",
 			   "balance":100,
-			   "keys":[
-				  {
+			   "keys":[{
 					 "index":0,
 					 "public_key":"%s",
 					 "signing_algorithm":"ECDSA_P256",
@@ -51,9 +50,15 @@ func TestGetAccount(t *testing.T) {
 					 "sequence_number":0,
 					 "weight":1000,
 					 "revoked":false
-				  }
-			   ]
-			}`, account.Address, account.Keys[0].PublicKey.String())
+				}],
+               	"_expandable": {
+					"keys": "keys",
+					"contracts": "contracts"
+				},
+				"_links": {
+					"_self": "/v1/accounts/%s"
+				}
+			}`, account.Address, account.Keys[0].PublicKey.String(), account.Address.String())
 
 			assert.Equal(t, http.StatusOK, rr.Code)
 			assert.JSONEq(t, expected, rr.Body.String())
