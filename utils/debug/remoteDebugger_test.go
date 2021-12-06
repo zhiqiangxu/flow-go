@@ -1,4 +1,4 @@
-package debug_test
+package debug
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/utils/debug"
 )
 
 func TestDebugger_RunTransaction(t *testing.T) {
@@ -19,7 +18,7 @@ func TestDebugger_RunTransaction(t *testing.T) {
 
 	grpcAddress := "localhost:3600"
 	chain := flow.Emulator.Chain()
-	debugger := debug.NewRemoteDebugger(grpcAddress, chain, zerolog.New(os.Stdout).With().Logger())
+	debugger := NewRemoteDebugger(grpcAddress, chain, zerolog.New(os.Stdout).With().Logger())
 
 	const scriptTemplate = `
 	import FlowServiceAccount from 0x%s
