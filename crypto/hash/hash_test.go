@@ -51,6 +51,16 @@ func TestSanitySha2_384(t *testing.T) {
 	assert.Equal(t, Hash(expected), hash)
 }
 
+// Sanity checks of KECCAK_256
+func TestSanityKeccak_256(t *testing.T) {
+	input := []byte("test")
+	expected, _ := hex.DecodeString("9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658")
+
+	alg := NewKECCAK_256()
+	hash := alg.ComputeHash(input)
+	assert.Equal(t, Hash(expected), hash)
+}
+
 // Sanity checks of KMAC128
 // the test vector is taken from the NIST document
 // https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/Kmac_samples.pdf
@@ -107,6 +117,7 @@ func TestHashersAPI(t *testing.T) {
 		NewSHA3_256,
 		NewSHA3_384,
 		newKmac128,
+		NewKECCAK_256,
 	}
 
 	r := time.Now().UnixNano()
